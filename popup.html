@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Reef</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Reef</h1>
+    <nav id="tabs">
+      <button data-tab="focus" class="active">Focus</button>
+      <button data-tab="todo">To-do</button>
+      <button data-tab="sites">Sites</button>
+      <button data-tab="reef">Reef</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Focus -->
+    <section id="tab-focus">
+      <div id="coral" class="coral-box"></div>
+      <p id="banner" class="banner" hidden></p>
+
+      <div id="idle-panel">
+        <label for="duration">Focus for</label>
+        <select id="duration">
+          <option value="15">15 minutes</option>
+          <option value="25" selected>25 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60">60 minutes</option>
+        </select>
+        <button id="start" class="primary">Start focus</button>
+        <p id="empty-hint" class="hint" hidden>Your blocklist is empty. Add sites in the Sites tab.</p>
+      </div>
+
+      <div id="active-panel" hidden>
+        <div id="timer" class="timer">00:00</div>
+        <p id="blocking-info" class="hint"></p>
+        <button id="give-up" class="danger-outline">Give up</button>
+        <div id="confirm-box" class="confirm" hidden>
+          <p>Your coral will bleach and won't join your reef.</p>
+          <div class="row">
+            <button id="keep-going" class="primary">Keep going</button>
+            <button id="confirm-give-up" class="danger">Give up</button>
+          </div>
+        </div>
+      </div>
+
+      <h2>Today</h2>
+      <div class="stats">
+        <div class="stat"><b id="stat-completed">0</b><span>completed</span></div>
+        <div class="stat"><b id="stat-failed">0</b><span>given up</span></div>
+        <div class="stat"><b id="stat-minutes">0</b><span>focus min</span></div>
+        <div class="stat"><b id="stat-todos">0</b><span>to-dos done</span></div>
+      </div>
+    </section>
+
+    <!-- To-do -->
+    <section id="tab-todo" hidden>
+      <form id="todo-form" class="row">
+        <input id="todo-title" type="text" placeholder="Add a to-do" autocomplete="off">
+        <select id="todo-tag" title="Auto-detect">
+          <option value="none">No tag</option>
+          <option value="email">Send email</option>
+        </select>
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <p id="todo-error" class="error" hidden></p>
+      <ul id="todo-open" class="list"></ul>
+      <p id="todo-empty" class="hint" hidden>Nothing to do. Nice.</p>
+      <h2>Done</h2>
+      <ul id="todo-done" class="list done"></ul>
+      <p class="hint">Tag a to-do "Send email" and Reef will ask you to confirm it when you send an email in Gmail. It never reads your emails.</p>
+    </section>
+
+    <!-- Sites -->
+    <section id="tab-sites" hidden>
+      <form id="site-form" class="row">
+        <input id="site-input" type="text" placeholder="youtube.com" autocomplete="off">
+        <button class="primary" type="submit">Block</button>
+      </form>
+      <p id="site-error" class="error" hidden></p>
+      <ul id="site-list" class="list"></ul>
+      <p id="site-empty" class="hint" hidden>No sites yet.</p>
+      <p id="site-lock" class="hint" hidden>Sites can't be removed during a focus session.</p>
+    </section>
+
+    <!-- Reef -->
+    <section id="tab-reef" hidden>
+      <p id="reef-count" class="hint"></p>
+      <div id="reef-grid" class="reef-grid"></div>
+    </section>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
