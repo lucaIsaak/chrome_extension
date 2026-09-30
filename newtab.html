@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New Tab</title>
+  <link rel="stylesheet" href="newtab.css">
+</head>
+<body>
+  <div class="bubbles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+  <div id="clock" class="clock"></div>
+
+  <aside class="panel stats-panel">
+    <h2>Today</h2>
+    <div class="stats">
+      <div><b id="stat-completed">0</b><span>completed</span></div>
+      <div><b id="stat-failed">0</b><span>given up</span></div>
+      <div><b id="stat-minutes">0</b><span>focus min</span></div>
+      <div><b id="stat-todos">0</b><span>to-dos done</span></div>
+    </div>
+  </aside>
+
+  <main class="center">
+    <div id="coral" class="coral"></div>
+    <p id="banner" class="banner" hidden></p>
+
+    <div id="idle-panel">
+      <div id="durations" class="durations">
+        <button data-min="15">15</button>
+        <button data-min="25" class="selected">25</button>
+        <button data-min="45">45</button>
+        <button data-min="60">60</button>
+        <span>min</span>
+      </div>
+      <button id="start" class="primary big">Start focus</button>
+      <p id="empty-hint" class="hint" hidden>No sites blocked yet. Add some in the Reef popup (toolbar icon, Sites tab).</p>
+    </div>
+
+    <div id="active-panel" hidden>
+      <div id="timer" class="timer">00:00</div>
+      <p id="blocking-info" class="hint"></p>
+      <button id="give-up" class="ghost">Give up</button>
+      <div id="confirm-box" class="confirm" hidden>
+        <p>Your coral will bleach and won't join your reef.</p>
+        <div class="row">
+          <button id="keep-going" class="primary">Keep going</button>
+          <button id="confirm-give-up" class="danger">Give up</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel todo-panel">
+    <h2>To-do</h2>
+    <form id="todo-form" class="row">
+      <input id="todo-title" type="text" placeholder="Add a to-do" autocomplete="off">
+      <select id="todo-tag" title="Auto-detect">
+        <option value="none">No tag</option>
+        <option value="email">Send email</option>
+      </select>
+      <button class="primary" type="submit">Add</button>
+    </form>
+    <p id="todo-error" class="error" hidden></p>
+    <ul id="todo-open" class="list"></ul>
+    <p id="todo-empty" class="hint" hidden>Nothing to do. Nice.</p>
+    <details id="done-details">
+      <summary>Done (<span id="done-count">0</span>)</summary>
+      <ul id="todo-done" class="list done"></ul>
+    </details>
+  </aside>
+
+  <footer class="seabed">
+    <div id="reef" class="reef"></div>
+    <div class="sand"><span id="reef-count"></span></div>
+  </footer>
+
+  <script src="shared.js"></script>
+  <script src="newtab.js"></script>
+</body>
+</html>

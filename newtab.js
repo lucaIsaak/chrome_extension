@@ -2,7 +2,8 @@ const $ = (sel) => document.querySelector(sel);
 
 const DEFAULTS = { blocklist: [], history: [], todos: [], session: null };
 let data = { ...DEFAULTS };
-let banner = null; // "completed" | "failed" after a session ends while the popup is open
+let minutes = 25;
+let banner = null; // "completed" | "failed" after a session ends while this tab is open
 let sawActive = false;
 let confirming = false;
 let checking = false;
@@ -77,13 +78,17 @@ function renderFocus() {
 function updateTimer() {
   const s = data.session;
   if (!s) return;
-  const remaining = s.endTime - Date.now();
-  $("#timer").textContent = Reef.formatTime(remaining);
+  $("#timer").textContent = Reef.formatTime(s.endTime - Date.now());
   const progress = (Date.now() - s.startTime) / (s.endTime - s.startTime);
   setCoral({ stage: Reef.stageFor(progress), hue: 12 });
 }
 
+function updateClock() {
+  $("#clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 async function tick() {
+  updateClock();
   if (!data.session || checking) return;
   if (data.session.endTime <= Date.now()) {
     checking = true;
@@ -95,9 +100,17 @@ async function tick() {
   }
 }
 
+$("#durations").addEventListener("click", (e) => {
+  const min = e.target.dataset && e.target.dataset.min;
+  if (!min) return;
+  minutes = Number(min);
+  for (const btn of document.querySelectorAll("#durations button")) {
+    btn.classList.toggle("selected", btn.dataset.min === min);
+  }
+});
 $("#start").addEventListener("click", async () => {
   banner = null;
-  const res = await send({ type: "start", minutes: Number($("#duration").value) });
+  const res = await send({ type: "start", minutes });
   if (!res || !res.ok) alert(res && res.error ? res.error : "Could not start.");
   await refresh();
 });
@@ -114,6 +127,7 @@ function renderTodos() {
   const open = data.todos.filter((t) => !t.done);
   const done = data.todos.filter((t) => t.done);
   $("#todo-empty").hidden = open.length > 0;
+  $("#done-count").textContent = done.length;
 
   const fill = (ul, items) => {
     ul.replaceChildren();
@@ -170,86 +184,25 @@ $("#todo-form").addEventListener("submit", async (e) => {
   await saveTodos([...data.todos, todo]);
 });
 
-// ---------- Sites ----------
-function renderSites() {
-  const active = isActive();
-  const ul = $("#site-list");
-  ul.replaceChildren();
-  for (const domain of data.blocklist) {
-    const li = document.createElement("li");
-    const label = document.createElement("span");
-    label.className = "label";
-    label.textContent = domain;
-    const del = document.createElement("button");
-    del.className = "icon-btn";
-    del.textContent = "×";
-    del.title = active ? "Locked during a focus session" : "Remove";
-    del.disabled = active;
-    del.addEventListener("click", () => removeSite(domain));
-    li.append(label, del);
-    ul.append(li);
-  }
-  $("#site-empty").hidden = data.blocklist.length > 0;
-  $("#site-lock").hidden = !active;
-}
-
-async function saveBlocklist(blocklist) {
-  data.blocklist = blocklist;
-  await chrome.storage.local.set({ blocklist });
-  await send({ type: "syncRules" });
-  render();
-}
-const removeSite = (domain) => {
-  if (isActive()) return;
-  return saveBlocklist(data.blocklist.filter((d) => d !== domain));
-};
-
-$("#site-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const err = $("#site-error");
-  const domain = Reef.normalizeDomain($("#site-input").value);
-  if (!domain) {
-    err.textContent = "Enter a valid site, like youtube.com.";
-    err.hidden = false;
-    return;
-  }
-  if (data.blocklist.includes(domain)) {
-    err.textContent = `${domain} is already in your list.`;
-    err.hidden = false;
-    return;
-  }
-  err.hidden = true;
-  $("#site-input").value = "";
-  await saveBlocklist([...data.blocklist, domain]);
-});
-
 // ---------- Reef ----------
 function renderReef() {
   const corals = data.history.filter((h) => h.status === "completed");
+  $("#reef").innerHTML = corals.slice(-40).map((h) => Reef.coralSVG({ stage: 4, hue: h.hue })).join("");
   $("#reef-count").textContent = corals.length
     ? `${corals.length} coral${corals.length === 1 ? "" : "s"} in your reef`
     : "Your reef is empty. Finish a focus session to grow your first coral.";
-  $("#reef-grid").innerHTML = corals.map((h) => Reef.coralSVG({ stage: 4, hue: h.hue })).join("");
 }
-
-// ---------- Tabs & wiring ----------
-$("#tabs").addEventListener("click", (e) => {
-  const tab = e.target.dataset && e.target.dataset.tab;
-  if (!tab) return;
-  for (const btn of document.querySelectorAll("#tabs button")) btn.classList.toggle("active", btn.dataset.tab === tab);
-  for (const name of ["focus", "todo", "sites", "reef"]) $("#tab-" + name).hidden = name !== tab;
-});
 
 function render() {
   renderFocus();
   renderTodos();
-  renderSites();
   renderReef();
 }
 
 chrome.storage.onChanged.addListener(refresh);
 
 (async () => {
+  updateClock();
   await send({ type: "check" }); // finalize a session that ended while the browser was closed
   await refresh();
   setInterval(tick, 1000);

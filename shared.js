@@ -68,7 +68,6 @@ const Reef = (() => {
     }
     return (
       `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Coral">` +
-      `<ellipse cx="50" cy="91" rx="30" ry="6" fill="hsl(38,45%,78%)"/>` +
       body +
       `</svg>`
     );

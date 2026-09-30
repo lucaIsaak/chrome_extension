@@ -80,6 +80,17 @@ The extension notices when you did the work and asks you to confirm.
 - [ ] Detection relies on Gmail's English "Message sent" confirmation, so V1 works with the English Gmail interface only.
 - [ ] Only Gmail is supported in V1. Other sites and mail clients are out of scope.
 
+### F8: New tab page
+Reef is the first thing you see in every new tab.
+
+- [ ] Opening a new tab shows the Reef page full screen (ocean background) instead of Chrome's default new tab.
+- [ ] It shows the clock, the current coral, the focus timer with a duration choice (15/25/45/60) and Start button.
+- [ ] Give up works the same as in the popup (confirmation, then the coral bleaches).
+- [ ] Today's stats and the to-do list (add, complete, delete, tag) are on the page and stay in sync with the popup.
+- [ ] The reef along the seabed shows the corals collected from completed sessions.
+- [ ] While a session is running, the timer and coral keep updating without reloading the tab.
+- [ ] Managing blocked sites stays in the popup (Sites tab).
+
 ## 3. Technical notes (for the build)
 
 - Manifest V3, plain HTML/CSS/JS, no build step.
