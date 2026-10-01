@@ -322,7 +322,13 @@ export function createTwinStage(container) {
     renderer.domElement.remove();
   }
 
-  return { setTwin, setTheme, dispose };
+  // PNG of the current view (render first so the buffer is fresh), used by the share card
+  function snapshot() {
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL("image/png");
+  }
+
+  return { setTwin, setTheme, snapshot, dispose };
 }
 
 // ===== model builders =====

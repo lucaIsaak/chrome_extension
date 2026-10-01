@@ -44,13 +44,27 @@
       <button data-theme="terminal" aria-pressed="false"><i class="sw sw-terminal"></i><span class="t">Terminal<small>log lines</small></span></button>
     </div>
     </div>
+    <div class="side-section">
+      <div class="eyebrow">Your data</div>
+      <label class="field"><span>Keep for</span>
+        <select id="retention">
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+          <option value="365">1 year</option>
+          <option value="0">Forever</option>
+        </select>
+      </label>
+      <button id="export" class="side-btn" type="button">Export all data</button>
+      <a class="side-link" href="privacy.html">Privacy policy</a>
+    </div>
   </aside>
   <main>
     <p id="status" class="status" role="status">Checking the recorder…</p>
-    <p class="lead">Reef watches what websites collect while you browse. Everything is stored on this device only and nothing is sent anywhere. Adult, dating, medical and political-party sites are never recorded.</p>
+    <p class="lead">Reef watches what websites collect while you browse. Everything is stored on this device only and nothing is sent anywhere. Private (incognito) windows are never recorded, and neither are adult, dating, medical and political-party sites.</p>
 
     <!-- Footprint -->
     <section id="tab-footprint" hidden>
+      <div id="weekly" class="card weekly"></div>
       <div id="summary" class="tiles"></div>
 
       <div class="two">
@@ -64,6 +78,9 @@
           <dl id="env" class="env"></dl>
         </div>
       </div>
+
+      <div id="blocked" class="card"></div>
+      <div id="distracting" class="card"></div>
 
       <div class="card">
         <div class="head"><h2>Websites</h2><span id="site-count" class="hint"></span></div>
@@ -79,6 +96,7 @@
           <div id="stage3d" class="stage3d" tabindex="0" role="img" aria-label="3D view of your digital twin. Drag or scroll to rotate."></div>
           <div id="avatar" class="avatar" hidden></div>
           <div class="stage-top eyebrow">Your digital twin</div>
+          <button id="share" class="share-btn" type="button">Share my twin</button>
           <div class="stage-hint">Drag or scroll to rotate · double-click to reset</div>
           <div class="stage-bottom">
             <div class="progress"><div id="progress-bar"></div></div>
@@ -87,6 +105,7 @@
         </div>
         <div class="card">
           <p class="lead small">This is what an ad network could plausibly guess about you from the same signals websites can see. They are crude guesses and often wrong. That is the point.</p>
+          <div id="fp-card" class="fp-card" hidden></div>
           <h2>Known the moment you open a page</h2>
           <div id="exposed" class="attrs"></div>
           <h2>Learned from how you browse</h2>
@@ -102,6 +121,9 @@
   <script src="trackers.js"></script>
   <script src="categories.js"></script>
   <script src="twin.js"></script>
+  <script src="report.js"></script>
+  <script src="fingerprint.js"></script>
+  <script src="sharecard.js"></script>
   <script src="insights.js"></script>
 </body>
 </html>

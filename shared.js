@@ -61,10 +61,11 @@ const Reef = (() => {
   const TIPS = [[24, 40], [76, 38], [40, 32], [57, 42]];
 
   // Returns an SVG string. Only numbers are interpolated, so it is safe for innerHTML.
-  function coralSVG({ stage = 4, bleached = false, hue = 12 } = {}) {
+  function coralSVG({ stage = 4, bleached = false, hue = 12, vivid = 1 } = {}) {
     const h = Number(hue) | 0;
-    const color = bleached ? "hsl(40,18%,86%)" : `hsl(${h},78%,62%)`;
-    const shade = bleached ? "hsl(40,10%,72%)" : `hsl(${h},70%,48%)`;
+    const v = Math.max(0, Math.min(1, Number(vivid)));
+    const color = bleached ? "hsl(40,18%,86%)" : `hsl(${h},${Math.round(30 + 48 * v)}%,${Math.round(40 + 22 * v)}%)`;
+    const shade = bleached ? "hsl(40,10%,72%)" : `hsl(${h},${Math.round(22 + 48 * v)}%,${Math.round(34 + 14 * v)}%)`;
     let body = "";
     if (stage === 0) {
       body += `<circle cx="50" cy="85" r="4.5" fill="${color}" stroke="${shade}" stroke-width="1.5"/>`;

@@ -1,0 +1,47 @@
+/* Plain document pages (welcome, privacy policy) in the Reef deep-sea style */
+:root {
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --bg: #0b2239;
+  --panel: #123a5a;
+  --line: #24587f;
+  --text: #eaf6f8;
+  --muted: #8fb8cc;
+  --coral: #ff7a6b;
+  --aqua: #7fe0d4;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); }
+.doc { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+.brandline { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.logo { width: 38px; height: 38px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 50%; display: grid; place-items: center; color: var(--coral); }
+.logo svg { width: 24px; height: 24px; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0 0 14px; font: 400 clamp(28px, 4vw, 40px) / 1.2 var(--serif); }
+h2 { margin: 0 0 8px; font: 400 22px / 1.25 var(--serif); }
+h3 { margin: 22px 0 6px; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; color: var(--aqua); }
+.lead { max-width: 720px; margin: 0 0 28px; color: var(--muted); font: italic 400 18px / 1.55 var(--serif); }
+p { margin: 0 0 12px; }
+.hint { color: var(--muted); font-size: 14px; }
+a { color: var(--aqua); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: rgba(255, 255, 255, 0.08); padding: 1px 6px; border-radius: 4px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; margin-bottom: 20px; }
+.two .card { margin-bottom: 0; }
+.ticks { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+.ticks li { position: relative; padding-left: 26px; font-size: 15px; }
+.ticks li::before { position: absolute; left: 0; top: 0; font-weight: 700; }
+.ticks.yes li::before { content: "✓"; color: var(--aqua); }
+.ticks.no li::before { content: "✕"; color: var(--coral); }
+.row { display: flex; align-items: center; gap: 12px; margin: 10px 0 4px; }
+select { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0 8px; }
+button, .btn { padding: 12px 24px; border-radius: 999px; border: 1px solid transparent; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+.primary { background: var(--coral); color: var(--bg); }
+.ghost { background: transparent; border-color: #4e7fa0; color: var(--text); }
+button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid var(--aqua); outline-offset: 2px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0 4px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; width: 34%; }
+@media (max-width: 720px) { .two { grid-template-columns: 1fr; } }

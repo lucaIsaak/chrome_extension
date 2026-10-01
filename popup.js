@@ -1,6 +1,6 @@
 const $ = (sel) => document.querySelector(sel);
 
-const DEFAULTS = { blocklist: [], history: [], todos: [], session: null };
+const DEFAULTS = { blocklist: [], history: [], todos: [], session: null, reefHealth: null };
 let data = { ...DEFAULTS };
 let banner = null; // "completed" | "failed" after a session ends while the popup is open
 let sawActive = false;
@@ -229,7 +229,7 @@ function renderReef() {
   $("#reef-count").textContent = corals.length
     ? `${corals.length} coral${corals.length === 1 ? "" : "s"} in your reef`
     : "Your reef is empty. Finish a focus session to grow your first coral.";
-  $("#reef-grid").innerHTML = corals.map((h) => Reef.coralSVG({ stage: 4, hue: h.hue })).join("");
+  $("#reef-grid").innerHTML = corals.map((h) => Reef.coralSVG({ stage: 4, hue: h.hue, vivid: 0.4 + 0.6 * ((data.reefHealth == null ? 60 : data.reefHealth) / 100) })).join("");
 }
 
 // ---------- Tabs & wiring ----------

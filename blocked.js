@@ -1,6 +1,9 @@
 const $ = (sel) => document.querySelector(sel);
 
 const site = Reef.normalizeDomain(new URLSearchParams(location.search).get("site")) || "this site";
+// Count this turned-away visit so Reef can show how much tracking focus mode avoided
+if (site !== "this site") chrome.runtime.sendMessage({ type: "blockedHit", site }).catch(() => {});
+
 let session = null;
 let coralKey = "";
 let finished = false;

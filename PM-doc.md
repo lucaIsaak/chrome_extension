@@ -132,6 +132,26 @@ Reef also shows **what websites collect about you** and what they could **infer*
 - [ ] Only counters are stored (categories, hours, domain counts). Page titles and text are classified locally and then discarded.
 - [ ] A note on the page states which traits are never inferred.
 
+### F11: Trust and housekeeping
+- [ ] Reef has a toolbar icon (the coral) at 16, 32, 48 and 128 pixels.
+- [ ] After installing, a welcome page opens. It explains what Reef records and never does. Recording stays off until the user presses "Start recording". "Not now" keeps the focus tools only. The same page lets the user choose how long data is kept.
+- [ ] Without that agreement nothing is recorded, and the Shadow page says so with a link to the welcome page. Switching the Recording toggle on before agreeing opens the welcome page.
+- [ ] When a focus session ends while the user is elsewhere, a desktop notification says so. Giving up and opening the popup after the fact do not notify.
+- [ ] Retention: the user can keep data for 30 days, 90 days, 1 year or forever. Older sites and daily signal buckets are deleted automatically once a day, and when the setting changes. The digital twin is rebuilt from what remains.
+- [ ] Each website has "Export this site" and "Delete this site" (with confirmation). Delete removes the record, its visits and its audience signals. There is also "Export all data" (a JSON file) and "Delete all data".
+- [ ] Private (incognito) windows are never recorded, even if the extension is allowed there. The Shadow page says so.
+- [ ] A privacy policy page (privacy.html) and PRIVACY.md describe what is stored, what never is, why each permission is needed, and the user's controls. It is linked from the welcome page and the Shadow sidebar.
+
+### F12: Act on what you learn (V2.2)
+- [ ] **Block this tracker:** next to every tracking company (and unknown third-party domain) in Footprint, in both Raw and Decoded views and in "Who follows you", there is a Block button. Blocking a company blocks all its tracking domains, only when loaded by another site, never the site itself. A "Blocked trackers" card lists everything blocked with Undo and "Unblock everything". Infrastructure such as CDNs and tag managers cannot be blocked. Focus-mode rules and tracker rules never delete each other.
+- [ ] **Blocked requests are counted** per day and per site, so the report can say how many were stopped.
+- [ ] **"Is this you?" feedback:** every twin guess has Right and Wrong buttons. A wrong guess is struck through, the avatar drops the matching detail (outfit, props), and the stage shows "you rated N guesses: M wrong". Answers fade after 30 days.
+- [ ] **Weekly privacy report** at the top of Footprint: companies that watched the user this week, change versus the previous week, worst site, top watcher and requests stopped by Reef. It says "first week" until there are two weeks of data.
+- [ ] **Shareable twin card:** a "Share my twin" button on the 3D stage opens a preview of a 1200x630 image (avatar plus guesses). Location, device and languages are unticked by default. An example-data switch avoids showing real browsing. Download PNG or Copy image. Nothing is uploaded.
+- [ ] **Focus and privacy:** blocked-site chips on the new tab show how many tracking companies usually watch the user there. The Focus session summary says how many visits Reef turned away and how many companies that avoided. A "Your distracting sites" card in Footprint shows the same per site.
+- [ ] **Reef health (0-100)** is computed from companies met this week and the share of tracking blocked. Low health makes the new tab water murkier and the reef corals duller, and the new tab shows "water clarity". Bleaching still only means a given-up session.
+- [ ] **Fingerprint test:** a card at the top of the Digital twin list shows a band (blends into a crowd / fairly distinctive / very distinctive / probably unique), how many signals any site can read, how many are rare and how many are protected, plus tips. It is labelled a rough estimate from bundled typical values, with no exact number.
+
 ## 3. Technical notes (for the build)
 
 - Manifest V3, plain HTML/CSS/JS, no build step.

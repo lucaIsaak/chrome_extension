@@ -1,6 +1,6 @@
 const $ = (sel) => document.querySelector(sel);
 
-let data = { sites: {}, signals: null, settings: { tracking: true } };
+let data = { sites: {}, signals: null, settings: { tracking: false } };
 const THEMES = ["glass", "hud", "terminal"];
 let theme = "glass";
 let view = "decoded"; // "raw" or "decoded" (plain-words explanations)
@@ -35,10 +35,21 @@ const el = (tag, cls, text) => {
 };
 
 async function load() {
-  const stored = await chrome.storage.local.get(["sites", "signals", "settings", "shadowTheme", "footprintView"]);
+  const stored = await chrome.storage.local.get(["sites", "signals", "settings", "shadowTheme", "footprintView", "blockedTrackers", "signalDays", "focusStats", "blocklist", "twinFeedback"]);
   applyTheme(stored.shadowTheme);
   view = stored.footprintView === "raw" ? "raw" : "decoded";
-  data = { sites: stored.sites || {}, signals: stored.signals || null, settings: { tracking: true, ...(stored.settings || {}) } };
+  const feedback = {};
+  for (const [k, v] of Object.entries(stored.twinFeedback || {})) if (Date.now() - v.at < 30 * 86400000) feedback[k] = v; // answers fade after 30 days
+  data = {
+    sites: stored.sites || {},
+    signals: stored.signals || null,
+    settings: { tracking: false, ...(stored.settings || {}) },
+    blocked: stored.blockedTrackers || { companies: [], domains: [] },
+    days: stored.signalDays || {},
+    focusStats: stored.focusStats || {},
+    blocklist: stored.blocklist || [],
+    feedback,
+  };
 }
 
 // ---------- Theme ----------
@@ -157,7 +168,7 @@ function renderSummary(entries) {
     const bar = el("i");
     bar.style.width = Math.max(4, (c.sites.size / entries.length) * 100) + "%";
     track.append(bar);
-    li.append(row, track);
+    li.append(row, track, blockButton({ company: name }));
     list.append(li);
   }
 }
@@ -187,6 +198,8 @@ function buildDetail(site, s, scored) {
         const li = el("li");
         const types = Object.entries(t.types || {}).map(([k, v]) => `${k} ×${v}`).join(", ");
         li.append(el("span", "grow mono", dom + (t.company ? ` · ${t.company}` : "")), el("span", "chip " + t.cat, CAT_LABEL[t.cat] || t.cat), el("span", "reason", `${t.n} request${t.n === 1 ? "" : "s"} (${types})`));
+        if (t.company && Trackers.TRACKING.has(t.cat)) li.append(blockButton({ company: t.company }));
+        else if (!t.company && t.cat === "other") li.append(blockButton({ domain: dom }));
         return li;
       }),
       "No third parties seen."
@@ -263,7 +276,11 @@ function renderSites(entries) {
       : `${sc.trackers} tracker${sc.trackers === 1 ? "" : "s"} · ${s.visits} visit${s.visits === 1 ? "" : "s"}`;
     sum.append(el("span", "domain", site), toggle, el("span", "meta", meta), el("span", "pill " + sc.cls, plain ? sc.plain : sc.label));
     d.append(sum);
-    const fill = () => d.append(view === "decoded" ? buildDecoded(site, s, sc) : buildDetail(site, s, sc));
+    const fill = () => {
+      const body = view === "decoded" ? buildDecoded(site, s, sc) : buildDetail(site, s, sc);
+      body.append(siteActions(site, s));
+      d.append(body);
+    };
     d.addEventListener("toggle", () => {
       if (d.open) {
         openSites.add(site);
@@ -279,6 +296,216 @@ function renderSites(entries) {
     wrap.append(d);
   }
 }
+
+// ---------- Blocking trackers ----------
+const isCompanyBlocked = (name) => (data.blocked.companies || []).includes(name);
+const isDomainBlocked = (dom) => (data.blocked.domains || []).includes(dom);
+
+function blockButton({ company, domain }) {
+  const blocked = company ? isCompanyBlocked(company) : isDomainBlocked(domain);
+  const b = el("button", "block-btn" + (blocked ? " on" : ""), blocked ? "Blocked · undo" : company ? "Block " + company : "Block this domain");
+  b.type = "button";
+  b.title = blocked
+    ? "Click to allow it again"
+    : company
+      ? `Stops all of ${company}'s tracking domains on every site you visit. A few sites may break. You can undo this any time.`
+      : `Stops ${domain} on every site you visit. You can undo this any time.`;
+  b.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await chrome.runtime.sendMessage({ type: blocked ? "unblockTracker" : "blockTracker", company, domain });
+    await load();
+    render();
+  });
+  return b;
+}
+
+function renderBlocked() {
+  const box = $("#blocked");
+  box.replaceChildren();
+  const companies = data.blocked.companies || [];
+  const domains = data.blocked.domains || [];
+  const total = companies.length + domains.length;
+  const head = el("div", "head");
+  head.append(el("h2", "", "Blocked trackers"), el("span", "hint", total ? `${total} blocked` : ""));
+  box.append(head);
+  if (!total) {
+    box.append(el("p", "hint", "Nothing blocked yet. Open a website below and press Block next to a company to stop it on every site."));
+    return;
+  }
+  const week = Report.weekly(data.days);
+  const ul = el("ul", "clean-list");
+  const row = (name, detail, undo) => {
+    const li = el("li");
+    const text = el("span", "grow");
+    text.append(el("b", "", name), el("span", "reason", " " + detail));
+    li.append(text, undo);
+    ul.append(li);
+  };
+  for (const c of companies) row(c, `${Trackers.domainsFor(c).length} domains · stopped ${week.blockedBy[c] || 0} requests this week`, blockButton({ company: c }));
+  for (const d of domains) row(d, "single domain", blockButton({ domain: d }));
+  box.append(ul);
+  const all = el("button", "block-btn", "Unblock everything");
+  all.type = "button";
+  all.addEventListener("click", async () => {
+    await chrome.runtime.sendMessage({ type: "unblockAll" });
+    await load();
+    render();
+  });
+  box.append(all, el("p", "hint", "Blocking a company stops all its tracking domains, which can include embedded videos or login buttons. If a site misbehaves, undo it here."));
+}
+
+// ---------- Weekly report and reef health ----------
+function renderWeekly() {
+  const w = Report.weekly(data.days);
+  const box = $("#weekly");
+  box.replaceChildren();
+  box.append(el("div", "eyebrow", "This week"));
+  if (!w.hasData) {
+    box.append(el("p", "hint", "Browse for a few days with recording on and your weekly report appears here."));
+    return;
+  }
+  const top = el("div", "weekly-top");
+  const big = el("div", "weekly-big");
+  big.append(el("b", "", String(w.companies)), el("span", "", ` ${w.companies === 1 ? "company" : "companies"} watched you`));
+  let delta = "First week of data";
+  let tone = "flat";
+  if (w.hasPrev) {
+    if (w.delta > 0) { delta = `▲ ${w.delta} more than last week`; tone = "up"; }
+    else if (w.delta < 0) { delta = `▼ ${-w.delta} fewer than last week`; tone = "down"; }
+    else delta = "Same as last week";
+  }
+  top.append(big, el("span", "delta " + tone, delta));
+  box.append(top);
+
+  const grid = el("div", "weekly-grid");
+  const stat = (label, value) => {
+    const d = el("div");
+    d.append(el("small", "", label), el("b", "", value));
+    grid.append(d);
+  };
+  stat("Worst site", w.worstSite ? `${w.worstSite.site} (${w.worstSite.companies} companies)` : "none yet");
+  stat("Top watcher", w.topWatcher ? `${w.topWatcher.name}, on ${w.topWatcher.sites} site${w.topWatcher.sites === 1 ? "" : "s"}` : "none yet");
+  stat("Stopped by Reef", `${w.blocked} request${w.blocked === 1 ? "" : "s"}`);
+  box.append(grid);
+
+  const h = Report.health(w);
+  const health = el("div", "health");
+  const msg = h >= 75 ? "Clear water: few trackers reach you." : h >= 45 ? "A bit cloudy: block more trackers to clear it." : "Murky water: many trackers follow you.";
+  health.append(el("span", "hint", `Reef health ${h}/100 · ${msg}`));
+  const track = el("div", "track");
+  const bar = el("i");
+  bar.style.width = h + "%";
+  track.append(bar);
+  health.append(track);
+  box.append(health);
+}
+
+// ---------- Distracting sites and their trackers ----------
+function renderDistracting() {
+  const box = $("#distracting");
+  box.replaceChildren();
+  box.append(el("h2", "", "Your distracting sites"));
+  const list = data.blocklist || [];
+  if (!list.length) {
+    box.append(el("p", "hint", "You have not blocked any sites for focus yet. Add some in the Focus card on your new tab, and Reef will show how much tracking they carry."));
+    return;
+  }
+  const hits = {};
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    for (const [dom, n] of Object.entries((data.focusStats || {})[Report.dayKey(d)] || {})) hits[dom] = (hits[dom] || 0) + n;
+  }
+  let totalHits = 0;
+  let avoided = 0;
+  const ul = el("ul", "clean-list");
+  for (const dom of list) {
+    const site = data.sites[Reef.registrable(dom)];
+    const watchers = site ? countWatchers(site) : null;
+    const h = hits[dom] || 0;
+    totalHits += h;
+    if (watchers) avoided += h * watchers;
+    const li = el("li");
+    const text = el("span", "grow");
+    text.append(el("b", "", dom), el("span", "reason", " " + (watchers === null ? "no data yet. Visit it once with recording on." : `${watchers} tracking compan${watchers === 1 ? "y" : "ies"} usually watch you here`)));
+    li.append(text, el("span", "reason", `${h} visit${h === 1 ? "" : "s"} turned away`));
+    ul.append(li);
+  }
+  box.append(
+    el("p", "hint", totalHits
+      ? `This week Reef turned away ${totalHits} visit${totalHits === 1 ? "" : "s"} to these sites${avoided ? `, which avoided roughly ${avoided} tracking-company encounters` : ""}. Staying focused is also a privacy win.`
+      : "No visits turned away yet this week. When a focus session blocks one of these, it counts here."),
+    ul
+  );
+}
+
+// ---------- "Is this you?" feedback on the twin ----------
+function feedbackRow(a) {
+  const fb = (data.feedback || {})[a.key];
+  const row = el("div", "feedback");
+  row.append(el("span", "hint", "Is this you?"));
+  for (const [verdict, label] of [["right", "✓ Right"], ["wrong", "✕ Wrong"]]) {
+    const on = fb && fb.verdict === verdict;
+    const b = el("button", on ? "on " + verdict : "", label);
+    b.type = "button";
+    b.addEventListener("click", () => rate(a.key, on ? null : verdict));
+    row.append(b);
+  }
+  return row;
+}
+
+async function rate(key, verdict) {
+  const fb = { ...(data.feedback || {}) };
+  if (verdict) fb[key] = { verdict, at: Date.now() };
+  else delete fb[key];
+  data.feedback = fb;
+  await chrome.storage.local.set({ twinFeedback: fb });
+  renderTwin();
+}
+
+// ---------- Export and delete ----------
+function download(name, obj) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const today = () => new Date().toISOString().slice(0, 10);
+
+function siteActions(site, s) {
+  const row = el("div", "site-actions");
+  const exp = el("button", "", "Export this site");
+  exp.type = "button";
+  exp.addEventListener("click", () => download(`reef-${site}-${today()}.json`, { site, exportedAt: new Date().toISOString(), ...s }));
+  const del = el("button", "", "Delete this site");
+  del.type = "button";
+  let armed = false;
+  del.addEventListener("click", async () => {
+    if (!armed) {
+      armed = true;
+      del.textContent = `Really forget ${site}?`;
+      del.classList.add("danger");
+      setTimeout(() => { armed = false; del.textContent = "Delete this site"; del.classList.remove("danger"); }, 4000);
+      return;
+    }
+    await chrome.runtime.sendMessage({ type: "deleteSite", site });
+    openSites.delete(site);
+    await load();
+    render();
+  });
+  row.append(exp, del);
+  return row;
+}
+
+$("#export").addEventListener("click", () =>
+  download(`reef-shadow-${today()}.json`, { exportedAt: new Date().toISOString(), settings: data.settings, sites: data.sites, signals: data.signals })
+);
+$("#retention").addEventListener("change", (e) =>
+  chrome.storage.local.set({ settings: { ...data.settings, retentionDays: Number(e.target.value) } })
+);
 
 // ---------- Decoded view (plain words) ----------
 const ROLE = {
@@ -347,12 +574,17 @@ function buildDecoded(site, s, sc) {
     const ul = el("ul", "plain-list");
     for (const w of watchers) {
       const li = el("li");
-      li.append(el("b", "", w.name), el("span", "chip " + w.role, ROLE[w.role][0]), el("span", "reason", ROLE[w.role][1]));
+      li.append(el("b", "", w.name), el("span", "chip " + w.role, ROLE[w.role][0]), el("span", "reason", ROLE[w.role][1]), blockButton({ company: w.name }));
       ul.append(li);
     }
     const wrap = el("div");
     wrap.append(el("h3", "", "Who was watching"), ul);
     if (unknown.length) wrap.append(el("p", "reason", `Also contacted, but not on our list of known trackers: ${unknown.slice(0, 8).join(", ")}${unknown.length > 8 ? " and " + (unknown.length - 8) + " more" : ""}.`));
+    if (unknown.length) {
+      const unk = el("div", "block-row");
+      for (const d of unknown.slice(0, 6)) unk.append(blockButton({ domain: d }));
+      wrap.append(unk);
+    }
     box.append(wrap);
   }
 
@@ -489,6 +721,8 @@ function renderAttrs(wrap, attrs) {
   wrap.replaceChildren();
   for (const a of attrs) {
     const row = el("div", "attr");
+    const rated = (data.feedback || {})[a.key];
+    if (rated && rated.verdict === "wrong") row.classList.add("wrong");
     const line = el("div", "line");
     line.append(el("span", "label", a.label), el("span", "value" + (a.value ? "" : " unknown"), a.value || "?"));
     row.append(line);
@@ -508,12 +742,14 @@ function renderAttrs(wrap, attrs) {
       d.append(ul);
       row.append(d);
     }
+    if (a.value) row.append(feedbackRow(a));
     wrap.append(row);
   }
 }
 
 // 3D stage (twin3d.js is loaded on demand). If WebGL is unavailable, fall back to the flat avatar.
 let stage = null;
+let currentAvatar = null; // the avatar currently shown in the 3D scene (after the user's corrections)
 let stageFailed = false;
 let stageLoading = null;
 function ensureStage() {
@@ -536,21 +772,148 @@ function ensureStage() {
 
 async function renderTwin() {
   const twin = Twin.infer(data.signals, browserEnv());
+  const fb = data.feedback || {};
+  if (fb.style && fb.style.verdict === "wrong") twin.avatar.style = null; // user said the outfit guess is wrong
+  if (fb.interests && fb.interests.verdict === "wrong") twin.avatar.props = [];
   $("#avatar").innerHTML = avatarSVG(twin.avatar);
   const pctDone = Math.round(twin.completeness * 100);
   $("#progress-bar").style.width = pctDone + "%";
   $("#progress-text").textContent = twin.avatar.pages
     ? `${pctDone}% complete · learned from ${twin.avatar.pages} page visit${twin.avatar.pages === 1 ? "" : "s"}`
     : "0% complete · browse for a while and your twin takes shape";
+  const rated = Object.values(fb);
+  if (rated.length) $("#progress-text").textContent += ` · you rated ${rated.length} guess${rated.length === 1 ? "" : "es"}: ${rated.filter((r) => r.verdict === "wrong").length} wrong`;
   renderAttrs($("#exposed"), twin.attrs.filter((a) => a.group === "exposed"));
   renderAttrs($("#inferred"), twin.attrs.filter((a) => a.group === "inferred"));
+  currentAvatar = twin.avatar;
+  renderFingerprint();
   await ensureStage();
   if (stage) stage.setTwin(twin.avatar);
 }
 
+// ---------- Fingerprint uniqueness ----------
+let fpResult = null;
+function renderFingerprint() {
+  const box = $("#fp-card");
+  box.replaceChildren();
+  try {
+    fpResult = fpResult || Fingerprint.measure();
+  } catch {
+    box.hidden = true;
+    return;
+  }
+  const r = fpResult;
+  box.hidden = false;
+  box.append(el("div", "eyebrow", "How easy is your browser to recognise?"));
+  const head = el("div", "fp-head");
+  head.append(el("b", "fp-band " + r.band.key, r.band.label), el("span", "reason", r.band.text));
+  box.append(head);
+  const meter = el("div", "fp-meter");
+  for (let i = 0; i < 4; i++) meter.append(el("i", i <= r.band.level ? "on l" + r.band.level : ""));
+  box.append(meter);
+  box.append(el("p", "hint", `${r.readable} signals any website can read · ${r.rare} of them rare${r.protectedCount ? " · " + r.protectedCount + " protected by your browser" : ""}. This is a rough estimate from typical values, not a measurement of you against other people.`));
+  const d = el("details");
+  d.append(el("summary", "", `All ${r.signals.length} signals`));
+  const ul = el("ul", "clean-list");
+  for (const s of r.signals) {
+    const li = el("li");
+    const text = el("span", "grow");
+    text.append(el("b", "", s.label), el("span", "reason", " " + s.value + (s.estimated ? " (estimated)" : "")));
+    li.append(text, el("span", "chip " + (s.tier === "rare" ? "advertising" : s.tier === "protected" ? "analytics" : ""), s.tier));
+    ul.append(li);
+  }
+  d.append(ul);
+  box.append(d);
+  const tips = el("ul", "clean-list tips");
+  for (const t of r.tips) tips.append(el("li", "", t));
+  box.append(tips);
+}
+
+// ---------- Share card ----------
+const SAMPLE_ENV = { tz: "Europe/Berlin", langs: ["de-DE", "en"], platform: "MacIntel", cores: 8, memory: 8, screen: { w: 1512, h: 982 } };
+const PRIVATE_BY_DEFAULT = ["location", "languages", "device"];
+
+async function openShare() {
+  if (!stage) return;
+  const dlg = el("dialog", "share-dialog");
+  const canvas = document.createElement("canvas");
+  canvas.className = "share-canvas";
+  const sampleBox = document.createElement("input");
+  sampleBox.type = "checkbox";
+  const sample = el("label", "share-sample");
+  sample.append(sampleBox, " Use example data instead of mine");
+  const opts = el("div", "share-opts");
+  const note = el("p", "hint", "Made on this device, nothing is uploaded. Location, device and languages are left out by default because they identify you.");
+  const msg = el("p", "hint");
+  const actions = el("div", "share-actions");
+  const dl = el("button", "primary", "Download PNG");
+  const cp = el("button", "", "Copy image");
+  const close = el("button", "", "Close");
+  for (const b of [dl, cp, close]) b.type = "button";
+  actions.append(dl, cp, close);
+  dlg.append(el("h2", "", "Share my twin"), canvas, sample, opts, note, actions, msg);
+  document.body.append(dlg);
+
+  const picked = new Set();
+  let current = null;
+  const render = async () => {
+    const real = Twin.infer(data.signals, browserEnv());
+    current = sampleBox.checked ? Twin.infer(ShareCard.SAMPLE_SIGNALS, SAMPLE_ENV) : real;
+    stage.setTwin(current.avatar);
+    const url = stage.snapshot();
+    stage.setTwin(currentAvatar || real.avatar); // put the real avatar back
+    const img = new Image();
+    await new Promise((r) => { img.onload = r; img.src = url; });
+    const rows = current.attrs.filter((a) => a.value && picked.has(a.key)).map((a) => ({ label: a.label, value: a.value, conf: a.conf }));
+    ShareCard.draw(canvas, { avatarImg: img, rows, completeness: current.completeness });
+  };
+  const buildOptions = () => {
+    const attrs = (sampleBox.checked ? Twin.infer(ShareCard.SAMPLE_SIGNALS, SAMPLE_ENV) : Twin.infer(data.signals, browserEnv())).attrs.filter((a) => a.value);
+    picked.clear();
+    opts.replaceChildren();
+    for (const a of attrs) {
+      if (!PRIVATE_BY_DEFAULT.includes(a.key)) picked.add(a.key);
+      const lab = el("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = picked.has(a.key);
+      cb.addEventListener("change", () => { cb.checked ? picked.add(a.key) : picked.delete(a.key); render(); });
+      lab.append(cb, " " + a.label);
+      opts.append(lab);
+    }
+  };
+  sampleBox.addEventListener("change", () => { buildOptions(); render(); });
+  dl.addEventListener("click", () => canvas.toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "reef-digital-twin.png";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }));
+  cp.addEventListener("click", () => canvas.toBlob(async (blob) => {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      msg.textContent = "Copied. Paste it into a post or chat.";
+    } catch {
+      msg.textContent = "Copying is not available here. Use Download PNG instead.";
+    }
+  }));
+  close.addEventListener("click", () => {
+    dlg.close();
+    dlg.remove();
+  });
+  dlg.addEventListener("close", () => dlg.remove());
+  buildOptions();
+  dlg.showModal();
+  render();
+}
+
+$("#share").addEventListener("click", openShare);
+
 // ---------- Controls ----------
 function renderControls() {
   $("#tracking").checked = data.settings.tracking;
+  $("#retention").value = String(data.settings.retentionDays == null ? 90 : data.settings.retentionDays);
   $("#tracking-label").textContent = data.settings.tracking ? "Recording" : "Paused";
   const btn = $("#clear");
   btn.textContent = confirmingClear ? "Really delete everything?" : "Delete all data";
@@ -565,7 +928,13 @@ document.querySelector(".themes").addEventListener("click", (e) => {
   chrome.storage.local.set({ shadowTheme: name });
 });
 
-$("#tracking").addEventListener("change", (e) => chrome.storage.local.set({ settings: { ...data.settings, tracking: e.target.checked } }));
+$("#tracking").addEventListener("change", (e) => {
+  if (e.target.checked && !data.settings.welcomed) {
+    location.href = "welcome.html"; // recording needs the user's explicit yes first
+    return;
+  }
+  chrome.storage.local.set({ settings: { ...data.settings, tracking: e.target.checked } });
+});
 $("#clear").addEventListener("click", async () => {
   if (!confirmingClear) {
     confirmingClear = true;
@@ -574,7 +943,7 @@ $("#clear").addEventListener("click", async () => {
     return;
   }
   confirmingClear = false;
-  await chrome.storage.local.remove(["sites", "signals"]);
+  await chrome.storage.local.remove(["sites", "signals", "signalDays"]);
 });
 
 $("#tabs").addEventListener("click", (e) => {
@@ -601,13 +970,22 @@ async function checkStatus() {
     el.textContent = "Chrome is still running an old version of Reef in the background. Open chrome://extensions, click the reload icon on Reef, then reload the pages you want to track.";
   } else if (!s.tracking) {
     el.className = "status";
-    el.textContent = "Recording is paused.";
+    if (s.welcomed) {
+      el.textContent = "Recording is paused.";
+    } else {
+      const link = document.createElement("a");
+      link.href = "welcome.html";
+      link.textContent = "Review what Reef records and start";
+      el.replaceChildren("Recording has not been switched on yet. ", link, ".");
+    }
   } else if (s.errors) {
     el.className = "status bad";
     el.textContent = `Recorder problem (${s.errors} error${s.errors === 1 ? "" : "s"}): ${s.lastError}`;
   } else {
     el.className = "status ok";
-    el.textContent = `Recording is active · ${s.pages} page${s.pages === 1 ? "" : "s"} seen since the recorder last started · ${s.sites} saved`;
+    const last = s.lastSite ? ` · last page: ${s.lastSite}` : "";
+    const aud = s.lastAudience ? ` · last audience signal: ${s.lastAudience.site} (${s.lastAudience.hint === "m" ? "men's" : "women's"} section)` : "";
+    el.textContent = `Recording is active · ${s.pages} page${s.pages === 1 ? "" : "s"} seen since the recorder last started · ${s.sites} saved${last}${aud}`;
   }
 }
 
@@ -615,7 +993,10 @@ function render() {
   const entries = Object.entries(data.sites);
   renderControls();
   renderEnv();
+  renderWeekly();
   renderSummary(entries);
+  renderBlocked();
+  renderDistracting();
   renderSites(entries);
   renderTwin();
 }
@@ -627,7 +1008,10 @@ chrome.storage.onChanged.addListener(() => {
     await load();
     if (document.querySelector(".site[open]")) {
       renderControls();
+      renderWeekly();
       renderSummary(Object.entries(data.sites));
+      renderBlocked();
+      renderDistracting();
       renderTwin();
     } else {
       render();

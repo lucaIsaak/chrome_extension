@@ -1,6 +1,8 @@
 const $ = (sel) => document.querySelector(sel);
 
-const DEFAULTS = { blocklist: [], history: [], todos: [], session: null, scene: null };
+const DEFAULTS = { blocklist: [], history: [], todos: [], session: null, scene: null, reefHealth: null };
+let siteData = {}; // recorded websites, only used to show tracker counts on the blocked-site chips
+let focusStats = {};
 
 const PRESETS = {
   dusk: { name: "Dusk", sky: ["#8fa1a0", "#c9c5b6"], seas: ["#2a5d70", "#1b4658", "#0f2f40"] },
@@ -40,6 +42,9 @@ const isActive = () => !!data.session && data.session.endTime > Date.now();
 
 async function load() {
   data = { ...DEFAULTS, ...(await chrome.storage.local.get(Object.keys(DEFAULTS))) };
+  const extra = await chrome.storage.local.get(["sites", "focusStats"]);
+  siteData = extra.sites || {};
+  focusStats = extra.focusStats || {};
 }
 
 async function refresh() {
@@ -60,6 +65,25 @@ function setCoral(opts) {
   if (key === coralKey) return;
   coralKey = key;
   $("#coral").innerHTML = Reef.coralSVG(opts);
+}
+
+// ---------- Focus and privacy ----------
+// How many tracking companies usually watch you on a site (null if never recorded)
+function trackerCompanies(domain) {
+  const site = siteData[Reef.registrable(domain)];
+  if (!site) return null;
+  const names = new Set();
+  for (const t of Object.values(site.trackers || {})) if (t.company && Trackers.TRACKING.has(t.cat)) names.add(t.company);
+  return names.size;
+}
+
+function focusPrivacyLine() {
+  let companies = 0;
+  for (const d of data.blocklist) companies += trackerCompanies(d) || 0;
+  const hits = Object.values(focusStats[Report.dayKey(new Date())] || {}).reduce((a, b) => a + b, 0);
+  if (!companies && !hits) return "";
+  const turned = hits ? `Reef turned away ${hits} visit${hits === 1 ? "" : "s"} today. ` : "";
+  return companies ? `${turned}Staying off those sites also avoids tracking from about ${companies} compan${companies === 1 ? "y" : "ies"}.` : turned.trim();
 }
 
 // ---------- Scene ----------
@@ -190,7 +214,7 @@ function renderFocus() {
   b.className = "banner" + (banner === "failed" ? " failed" : "");
   b.textContent =
     banner === "completed"
-      ? "Session complete. A new coral joined your reef."
+      ? "Session complete. A new coral joined your reef. " + focusPrivacyLine()
       : "Your coral bleached.";
 
   if (active) {
@@ -264,6 +288,8 @@ function renderSites() {
   }
   for (const domain of data.blocklist) {
     const li = el("li", "", domain);
+    const tc = trackerCompanies(domain);
+    if (tc !== null) li.append(el("small", "", `· ${tc} tracker${tc === 1 ? "" : "s"}`));
     const del = el("button", "icon-btn", "×");
     del.title = "Remove";
     del.setAttribute("aria-label", "Remove " + domain);
@@ -376,9 +402,12 @@ $("#todo-form").addEventListener("submit", async (e) => {
 // ---------- Reef ----------
 function renderReef() {
   const corals = data.history.filter((h) => h.status === "completed");
-  $("#reef").innerHTML = corals.slice(-24).map((h) => Reef.coralSVG({ stage: 4, hue: h.hue })).join("");
+  const health = data.reefHealth == null ? 60 : data.reefHealth;
+  const vivid = 0.4 + 0.6 * (health / 100); // dull when many trackers follow you, vivid when you block them
+  $("#reef").innerHTML = corals.slice(-24).map((h) => Reef.coralSVG({ stage: 4, hue: h.hue, vivid })).join("");
+  $("#haze").style.opacity = String(((100 - health) / 100) * 0.4); // murkier water
   $("#reef-count").textContent = corals.length
-    ? `${corals.length} coral${corals.length === 1 ? "" : "s"} in your reef`
+    ? `${corals.length} coral${corals.length === 1 ? "" : "s"} in your reef · water clarity ${health}%`
     : "Finish a session to grow your first coral";
 }
 

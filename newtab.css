@@ -272,6 +272,10 @@ summary { cursor: pointer; font-size: 13px; }
 }
 .reef svg { width: 44px; height: 44px; margin: 0 -5px; }
 
+/* Water clarity: murkier when many trackers follow you (set from reef health) */
+.haze { position: fixed; inset: 0; pointer-events: none; background: #3f6f5c; opacity: 0; transition: opacity 1.2s; }
+.chips li small { color: var(--muted); font-size: 12px; margin-left: 4px; }
+
 /* Narrow windows: stack everything */
 @media (max-width: 1000px) {
   body { overflow: auto; height: auto; min-height: 100%; }

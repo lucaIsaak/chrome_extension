@@ -4,7 +4,8 @@
 // Storage keys:
 //   sites   { [site]: { visits, first, last, cats[], trackers{}, cookies{}, params{}, fp{} } }
 //   signals { cats{}, hours[24], days[7], domains{}, pages, since }
-//   settings { tracking: bool }
+//   signalDays { "YYYY-MM-DD": { cats, hours, days, domains, gender, pages } }  (so old data can expire)
+//   settings { tracking: bool, welcomed: bool, retentionDays: number (0 = keep forever) }
 
 const Shadow = (() => {
   const MAX_SITES = 300;
@@ -13,9 +14,13 @@ const Shadow = (() => {
   const MAX_COOKIES = 120;
   const MAX_PARAMS = 80;
 
-  const model = { sites: {}, signals: newSignals(), settings: { tracking: true } };
+  const PRIVATE = "(private)"; // marker for tabs in private windows, which are never recorded
+  const model = { sites: {}, signals: newSignals(), days: {}, settings: { tracking: false }, blocked: { companies: [], domains: [] } }; // off until the user agrees on the welcome page
+  let blockedSet = new Set(); // every domain the user chose to block
+  let lastHealth = null;
   let tabSites = {}; // tabId -> registrable domain of the page in that tab
-  const stats = { started: Date.now(), requests: 0, pages: 0, errors: 0, lastError: null, lastPage: null };
+  const stats = { started: Date.now(), requests: 0, pages: 0, errors: 0, lastError: null, lastPage: null, lastSite: null, lastAudience: null };
+  const lastPath = {}; // tabId -> address path already counted for the audience signal
   const fail = (e) => {
     stats.errors++;
     stats.lastError = String((e && e.message) || e);
@@ -25,14 +30,57 @@ const Shadow = (() => {
   function newSignals() {
     return { cats: {}, hours: Array(24).fill(0), days: Array(7).fill(0), domains: {}, gender: { m: 0, f: 0, sites: {} }, pages: 0, since: Date.now() };
   }
+  const newBucket = () => ({ cats: {}, hours: Array(24).fill(0), days: Array(7).fill(0), domains: {}, gender: { m: 0, f: 0, sites: {} }, pages: 0, trackReq: 0, watch: {}, blocked: { n: 0, byCompany: {} } });
+  const dateKey = (ts) => {
+    const d = new Date(ts);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  };
+  const bucket = () => {
+    const b = model.days[dateKey(Date.now())] || (model.days[dateKey(Date.now())] = newBucket());
+    b.trackReq = b.trackReq || 0; // buckets from older versions lack the weekly-report fields
+    b.watch = b.watch || {};
+    b.blocked = b.blocked || { n: 0, byCompany: {} };
+    return b;
+  };
+
+  // Rebuild the running totals from the daily buckets (used after pruning or deleting a site)
+  function rebuildSignals() {
+    const sig = newSignals();
+    sig.since = model.signals.since;
+    for (const b of Object.values(model.days)) {
+      for (const [c, n] of Object.entries(b.cats)) sig.cats[c] = (sig.cats[c] || 0) + n;
+      b.hours.forEach((n, i) => (sig.hours[i] += n));
+      b.days.forEach((n, i) => (sig.days[i] += n));
+      sig.pages += b.pages;
+      for (const [d, v] of Object.entries(b.domains)) (sig.domains[d] = sig.domains[d] || { n: 0 }).n += v.n;
+      sig.gender.m += b.gender.m;
+      sig.gender.f += b.gender.f;
+      for (const [d, v] of Object.entries(b.gender.sites)) {
+        const x = sig.gender.sites[d] || (sig.gender.sites[d] = { m: 0, f: 0 });
+        x.m += v.m;
+        x.f += v.f;
+      }
+    }
+    const keep = Object.keys(sig.domains).sort((a, b) => sig.domains[b].n - sig.domains[a].n).slice(0, MAX_DOMAINS);
+    sig.domains = Object.fromEntries(keep.map((d) => [d, sig.domains[d]]));
+    model.signals = sig;
+  }
 
   const loaded = Promise.all([
-    chrome.storage.local.get(["sites", "signals", "settings"]),
+    chrome.storage.local.get(["sites", "signals", "settings", "signalDays", "blockedTrackers"]),
     chrome.storage.session.get("tabSites").catch(() => ({})),
   ]).then(([local, session]) => {
     if (local.sites) model.sites = local.sites;
     if (local.signals) model.signals = { ...newSignals(), ...local.signals };
-    if (local.settings) model.settings = { tracking: true, ...local.settings };
+    if (local.settings) model.settings = { tracking: false, ...local.settings };
+    if (local.signalDays) {
+      model.days = local.signalDays;
+    } else if (model.signals.pages > 0) {
+      // data from before daily buckets existed: keep it as one bucket so it can expire too
+      model.days[dateKey(model.signals.since)] = JSON.parse(JSON.stringify({ ...newBucket(), ...model.signals, since: undefined }));
+    }
+    if (local.blockedTrackers) model.blocked = local.blockedTrackers;
+    blockedSet = new Set(Trackers.blockDomains(model.blocked));
     tabSites = (session && session.tabSites) || {};
   });
 
@@ -42,20 +90,37 @@ const Shadow = (() => {
   }
   function flush() {
     saveTimer = null;
-    chrome.storage.local.set({ sites: model.sites, signals: model.signals });
+    const out = { sites: model.sites, signals: model.signals, signalDays: model.days };
+    const health = Report.health(Report.weekly(model.days));
+    if (health !== lastHealth) {
+      lastHealth = health;
+      out.reefHealth = health; // small key the new tab can read cheaply
+    }
+    chrome.storage.local.set(out);
   }
   const persistTabs = () => chrome.storage.session.set({ tabSites }).catch(() => {});
 
   // Reset when the user deletes data, follow the pause setting
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.settings && changes.settings.newValue) model.settings = { tracking: true, ...changes.settings.newValue };
+    if (changes.settings && changes.settings.newValue) {
+      const before = model.settings.retentionDays;
+      model.settings = { tracking: false, ...changes.settings.newValue };
+      if (model.settings.retentionDays !== before) prune();
+    }
+    if (changes.blockedTrackers) {
+      model.blocked = changes.blockedTrackers.newValue || { companies: [], domains: [] };
+      blockedSet = new Set(Trackers.blockDomains(model.blocked));
+    }
     if (changes.sites && !changes.sites.newValue) {
       model.sites = {};
       clearTimeout(saveTimer);
       saveTimer = null;
     }
-    if (changes.signals && !changes.signals.newValue) model.signals = newSignals();
+    if (changes.signals && !changes.signals.newValue) {
+      model.signals = newSignals();
+      model.days = {};
+    }
   });
   chrome.tabs.onRemoved.addListener((tabId) => {
     if (tabSites[tabId]) {
@@ -81,6 +146,47 @@ const Shadow = (() => {
     for (const c of cats) {
       if (!site.cats.includes(c)) site.cats.push(c);
       model.signals.cats[c] = (model.signals.cats[c] || 0) + 1;
+      bucket().cats[c] = (bucket().cats[c] || 0) + 1;
+    }
+  }
+
+  function countAudience(site, hint) {
+    const g = model.signals.gender || (model.signals.gender = { m: 0, f: 0, sites: {} });
+    g[hint]++;
+    const bg = bucket().gender;
+    bg[hint]++;
+    if (g.sites[site] || Object.keys(g.sites).length < 60) {
+      const d = g.sites[site] || (g.sites[site] = { m: 0, f: 0 });
+      d[hint]++;
+      const bd = bg.sites[site] || (bg.sites[site] = { m: 0, f: 0 });
+      bd[hint]++;
+    }
+    stats.lastAudience = { site, hint, at: Date.now() };
+  }
+
+  async function isPrivate(tabId) {
+    try {
+      return !!(await chrome.tabs.get(tabId)).incognito;
+    } catch {
+      return false;
+    }
+  }
+
+  // Works out the site of a tab even if the page was loaded before the recorder started
+  function siteForTab(tab) {
+    if (tab.incognito || tabSites[tab.id] === PRIVATE) return null; // private windows are never recorded
+    const known = tabSites[tab.id];
+    if (known && model.sites[known]) return known;
+    try {
+      const host = new URL(tab.url).hostname;
+      if (Cats.isSensitive(host)) return null;
+      const site = recordVisit(host);
+      stats.pages++;
+      tabSites[tab.id] = site;
+      persistTabs();
+      return site;
+    } catch {
+      return null;
     }
   }
 
@@ -94,6 +200,11 @@ const Shadow = (() => {
     sig.pages++;
     sig.hours[now.getHours()]++;
     sig.days[now.getDay()]++;
+    const b = bucket();
+    b.pages++;
+    b.hours[now.getHours()]++;
+    b.days[now.getDay()]++;
+    (b.domains[site] = b.domains[site] || { n: 0 }).n++;
     const d = sig.domains[site] || (sig.domains[site] = { n: 0 });
     d.n++;
     if (Object.keys(sig.domains).length > MAX_DOMAINS) {
@@ -184,12 +295,18 @@ const Shadow = (() => {
     }
 
     if (details.type === "main_frame") {
-      if (Cats.isSensitive(url.hostname)) {
+      if (await isPrivate(details.tabId)) {
+        tabSites[details.tabId] = PRIVATE; // remember, so nothing from this tab is recorded
+      } else if (Cats.isSensitive(url.hostname)) {
         delete tabSites[details.tabId]; // sensitive site: record nothing
       } else {
         tabSites[details.tabId] = recordVisit(url.hostname);
         stats.pages++;
         stats.lastPage = Date.now();
+        stats.lastSite = tabSites[details.tabId];
+        const pathHint = Cats.genderHint(url.pathname);
+        if (pathHint) countAudience(tabSites[details.tabId], pathHint);
+        lastPath[details.tabId] = url.pathname;
       }
       persistTabs();
       scheduleSave();
@@ -210,6 +327,14 @@ const Shadow = (() => {
     }
     t.n++;
     t.types[details.type] = (t.types[details.type] || 0) + 1;
+    if (known && Trackers.TRACKING.has(known.cat)) {
+      const b = bucket();
+      b.trackReq++;
+      if (b.watch[known.company] || Object.keys(b.watch).length < 200) {
+        const w = (b.watch[known.company] = b.watch[known.company] || {});
+        w[top] = (w[top] || 0) + 1;
+      }
+    }
     noteParams(s, reg, url, details);
     scheduleSave();
   }
@@ -217,6 +342,8 @@ const Shadow = (() => {
   async function onHeaders(details) {
     await loaded;
     if (!model.settings.tracking || details.tabId < 0) return;
+    if (tabSites[details.tabId] === PRIVATE) return;
+    if (details.type === "main_frame" && (await isPrivate(details.tabId))) return;
     let host;
     try {
       host = new URL(details.url).hostname;
@@ -249,6 +376,32 @@ const Shadow = (() => {
     scheduleSave();
   }
 
+  // A request cancelled by the user's block list ends with "blocked by client"
+  async function onBlocked(details) {
+    await loaded;
+    if (details.error !== "net::ERR_BLOCKED_BY_CLIENT" || details.tabId < 0) return;
+    let host;
+    try {
+      host = new URL(details.url).hostname;
+    } catch {
+      return;
+    }
+    const reg = Reef.registrable(host);
+    if (!blockedSet.has(reg) && !blockedSet.has(host)) return; // blocked by something else, not by Reef
+    const known = Trackers.lookup(host);
+    const name = known ? known.company : reg;
+    const b = bucket();
+    b.blocked.n++;
+    b.blocked.byCompany[name] = (b.blocked.byCompany[name] || 0) + 1;
+    const top = tabSites[details.tabId];
+    if (top && model.sites[top]) {
+      const s = model.sites[top];
+      s.blockedN = (s.blockedN || 0) + 1;
+      if (s.trackers[reg]) s.trackers[reg].blocked = (s.trackers[reg].blocked || 0) + 1;
+    }
+    scheduleSave();
+  }
+
   // Errors are counted and shown on the Shadow page instead of silently stopping the recorder
   const guard = (fn) => async (details) => {
     try {
@@ -261,6 +414,7 @@ const Shadow = (() => {
     const filter = { urls: ["http://*/*", "https://*/*"] };
     chrome.webRequest.onBeforeRequest.addListener(guard(onRequest), filter, ["requestBody"]);
     chrome.webRequest.onHeadersReceived.addListener(guard(onHeaders), filter, ["responseHeaders", "extraHeaders"]);
+    chrome.webRequest.onErrorOccurred.addListener(guard(onBlocked), filter);
   } catch (e) {
     fail(e);
   }
@@ -270,7 +424,7 @@ const Shadow = (() => {
   async function handle(msg, sender) {
     await loaded;
     if (!model.settings.tracking || !sender.tab || sender.tab.id < 0) return;
-    const top = tabSites[sender.tab.id];
+    const top = siteForTab(sender.tab);
     if (!top || !model.sites[top]) return;
     const s = model.sites[top];
 
@@ -290,14 +444,10 @@ const Shadow = (() => {
       addCats(s, Cats.classifyText(text));
       // Shop sections such as /men/ or "Moda homem" (counts only; the address itself is not kept)
       const hint = Cats.genderHint(msg.path, msg.title);
-      if (hint) {
-        const g = model.signals.gender || (model.signals.gender = { m: 0, f: 0, sites: {} });
-        g[hint]++;
-        if (g.sites[top] || Object.keys(g.sites).length < 60) {
-          const d = g.sites[top] || (g.sites[top] = { m: 0, f: 0 });
-          d[hint]++;
-        }
-      }
+      const alreadyCounted = msg.path && lastPath[sender.tab.id] === msg.path && Cats.genderHint(msg.path);
+      if (hint && !alreadyCounted) countAudience(top, hint);
+      if (msg.path) lastPath[sender.tab.id] = msg.path;
+      stats.lastSite = top;
       scheduleSave();
     }
   }
@@ -309,10 +459,61 @@ const Shadow = (() => {
     }
   });
 
-  async function status() {
+  // Remove data older than the retention setting (0 = keep forever)
+  async function prune() {
     await loaded;
-    return { ok: true, tracking: model.settings.tracking, sites: Object.keys(model.sites).length, ...stats };
+    const days = Number(model.settings.retentionDays == null ? 90 : model.settings.retentionDays);
+    if (!days) return;
+    const cutoff = Date.now() - days * 86400000;
+    const cutKey = dateKey(cutoff);
+    let changed = false;
+    for (const [k, s] of Object.entries(model.sites)) {
+      if (s.last < cutoff) {
+        delete model.sites[k];
+        changed = true;
+      }
+    }
+    for (const k of Object.keys(model.days)) {
+      if (k < cutKey) {
+        delete model.days[k];
+        changed = true;
+      }
+    }
+    if (changed) {
+      rebuildSignals();
+      scheduleSave();
+    }
   }
 
-  return { handle, status };
+  // Forget one website: its record, its visits and its audience signals. Interests learned from it stay until old data expires.
+  async function deleteSite(site) {
+    await loaded;
+    delete model.sites[site];
+    for (const b of Object.values(model.days)) {
+      if (b.domains[site]) {
+        b.pages = Math.max(0, b.pages - b.domains[site].n);
+        delete b.domains[site];
+      }
+      const g = b.gender.sites[site];
+      if (g) {
+        b.gender.m -= g.m;
+        b.gender.f -= g.f;
+        delete b.gender.sites[site];
+      }
+    }
+    for (const id of Object.keys(tabSites)) if (tabSites[id] === site) delete tabSites[id];
+    rebuildSignals();
+    persistTabs();
+    scheduleSave();
+    return { ok: true };
+  }
+
+  async function status() {
+    await loaded;
+    return { ok: true, tracking: model.settings.tracking, welcomed: !!model.settings.welcomed, retentionDays: model.settings.retentionDays == null ? 90 : model.settings.retentionDays, sites: Object.keys(model.sites).length, ...stats };
+  }
+
+  loaded.then(() => prune()).catch(fail);
+
+  return { handle, status, prune, deleteSite };
 })();

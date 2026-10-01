@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome to Reef</title>
+  <link rel="stylesheet" href="page.css">
+</head>
+<body>
+  <main class="doc">
+    <div class="brandline">
+      <span class="logo"><svg viewBox="0 0 100 100"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="6"><path d="M50 90V58"/><path d="M50 80L36 66L30 50L24 40"/><path d="M50 78L64 64L70 48L76 38"/><path d="M50 58L44 44L40 32"/><path d="M50 58L57 42"/></g></svg></span>
+      <span class="eyebrow">Welcome to Reef</span>
+    </div>
+    <h1>Before Reef starts watching, here is exactly what that means</h1>
+    <p class="lead">Reef has two jobs. It helps you focus by blocking distracting sites and growing a coral. And it shows you what websites collect about you. The second job needs to look at your browsing, so it stays switched off until you say yes.</p>
+
+    <div id="choice">
+      <div class="two">
+        <section class="card">
+          <h2>What Reef records</h2>
+          <p class="hint">On this device only.</p>
+          <ul class="ticks yes">
+            <li>The names of the websites you visit, like <code>spiegel.de</code>, and how often</li>
+            <li>Which companies those sites contact in the background, and what kind of data fields are sent to them</li>
+            <li>Cookie names and how long they last, never their contents</li>
+            <li>Whether scripts try to read details of your device (fingerprinting)</li>
+            <li>Page titles are read once to guess a topic, then thrown away</li>
+            <li>Shop sections such as "men's" or "women's", as counts only</li>
+          </ul>
+        </section>
+        <section class="card">
+          <h2>What Reef never does</h2>
+          <p class="hint">Not now, not later.</p>
+          <ul class="ticks no">
+            <li>Send anything to a server. There are no accounts, no analytics, no ads</li>
+            <li>Store page content, passwords, form entries or the text of your emails</li>
+            <li>Record private (incognito) windows, even if you allow Reef there</li>
+            <li>Record adult, dating, medical or political-party sites at all</li>
+            <li>Guess political views, sexual orientation, health, religion or ethnicity</li>
+          </ul>
+        </section>
+      </div>
+
+      <section class="card">
+        <h2>You stay in control</h2>
+        <label class="row">
+          <span>Keep my data for</span>
+          <select id="retention">
+            <option value="30">30 days</option>
+            <option value="90" selected>90 days</option>
+            <option value="365">1 year</option>
+            <option value="0">Forever</option>
+          </select>
+        </label>
+        <p class="hint">Older data is deleted automatically. You can also pause recording, export your data, or delete a single site or everything, any time, on the "your shadow" page. The focus timer, blocking and to-do list work without any of this.</p>
+        <div class="actions">
+          <button id="start" class="primary">Start recording</button>
+          <button id="later" class="ghost">Not now, just use the focus tools</button>
+        </div>
+        <p class="hint">Read the full <a href="privacy.html">privacy policy</a>.</p>
+      </section>
+    </div>
+
+    <div id="done" class="card" hidden>
+      <h2 id="done-title"></h2>
+      <p id="done-text" class="hint"></p>
+      <div class="actions">
+        <a class="primary btn" href="newtab.html">Open my new tab</a>
+        <a class="ghost btn" href="insights.html">Go to your shadow</a>
+      </div>
+    </div>
+  </main>
+  <script src="welcome.js"></script>
+</body>
+</html>

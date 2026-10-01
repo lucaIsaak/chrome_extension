@@ -131,6 +131,20 @@ const Trackers = (() => {
   // Categories that count as tracking in the exposure score
   const TRACKING = new Set(["advertising", "analytics", "social", "session-replay", "data-broker"]);
 
+  // company -> its tracking domains (infrastructure such as CDNs is never offered for blocking)
+  const BY_COMPANY = {};
+  for (const [domain, [company, cat]] of Object.entries(LIST)) {
+    if (TRACKING.has(cat)) (BY_COMPANY[company] = BY_COMPANY[company] || []).push(domain);
+  }
+  const domainsFor = (company) => BY_COMPANY[company] || [];
+
+  // blocked = { companies: [name], domains: [domain] } -> every domain to block
+  function blockDomains(blocked) {
+    const out = new Set((blocked && blocked.domains) || []);
+    for (const c of (blocked && blocked.companies) || []) domainsFor(c).forEach((d) => out.add(d));
+    return [...out];
+  }
+
   // Walk up the host name: "px.ads.linkedin.com" -> "ads.linkedin.com" -> "linkedin.com"
   function lookup(host) {
     const parts = String(host || "").toLowerCase().split(".");
@@ -141,5 +155,5 @@ const Trackers = (() => {
     return null;
   }
 
-  return { lookup, TRACKING };
+  return { lookup, TRACKING, domainsFor, blockDomains };
 })();
