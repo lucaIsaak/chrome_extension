@@ -7,72 +7,129 @@
   <link rel="stylesheet" href="newtab.css">
 </head>
 <body>
-  <div class="bubbles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="cr" viewBox="0 0 100 100">
+      <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="6">
+        <path d="M50 90V58"/><path d="M50 80L36 66L30 50L24 40"/><path d="M50 78L64 64L70 48L76 38"/><path d="M50 58L44 44L40 32"/><path d="M50 58L57 42"/>
+      </g>
+      <g fill="currentColor"><circle cx="24" cy="40" r="4"/><circle cx="76" cy="38" r="4"/><circle cx="40" cy="32" r="4"/><circle cx="57" cy="42" r="4"/></g>
+    </symbol>
+  </svg>
 
-  <div id="clock" class="clock"></div>
-
-  <aside class="panel stats-panel">
-    <h2>Today</h2>
-    <div class="stats">
-      <div><b id="stat-completed">0</b><span>completed</span></div>
-      <div><b id="stat-failed">0</b><span>given up</span></div>
-      <div><b id="stat-minutes">0</b><span>focus min</span></div>
-      <div><b id="stat-todos">0</b><span>to-dos done</span></div>
+  <div id="scene" class="scene">
+    <div class="waves" aria-hidden="true">
+      <svg viewBox="0 0 2880 600" preserveAspectRatio="none">
+        <path class="w1" d="M0 110.0 L20 116.7 L40 123.0 L60 128.4 L80 132.5 L100 135.1 L120 136.0 L140 135.1 L160 132.5 L180 128.4 L200 123.0 L220 116.7 L240 110.0 L260 103.3 L280 97.0 L300 91.6 L320 87.5 L340 84.9 L360 84.0 L380 84.9 L400 87.5 L420 91.6 L440 97.0 L460 103.3 L480 110.0 L500 116.7 L520 123.0 L540 128.4 L560 132.5 L580 135.1 L600 136.0 L620 135.1 L640 132.5 L660 128.4 L680 123.0 L700 116.7 L720 110.0 L740 103.3 L760 97.0 L780 91.6 L800 87.5 L820 84.9 L840 84.0 L860 84.9 L880 87.5 L900 91.6 L920 97.0 L940 103.3 L960 110.0 L980 116.7 L1000 123.0 L1020 128.4 L1040 132.5 L1060 135.1 L1080 136.0 L1100 135.1 L1120 132.5 L1140 128.4 L1160 123.0 L1180 116.7 L1200 110.0 L1220 103.3 L1240 97.0 L1260 91.6 L1280 87.5 L1300 84.9 L1320 84.0 L1340 84.9 L1360 87.5 L1380 91.6 L1400 97.0 L1420 103.3 L1440 110.0 L1460 116.7 L1480 123.0 L1500 128.4 L1520 132.5 L1540 135.1 L1560 136.0 L1580 135.1 L1600 132.5 L1620 128.4 L1640 123.0 L1660 116.7 L1680 110.0 L1700 103.3 L1720 97.0 L1740 91.6 L1760 87.5 L1780 84.9 L1800 84.0 L1820 84.9 L1840 87.5 L1860 91.6 L1880 97.0 L1900 103.3 L1920 110.0 L1940 116.7 L1960 123.0 L1980 128.4 L2000 132.5 L2020 135.1 L2040 136.0 L2060 135.1 L2080 132.5 L2100 128.4 L2120 123.0 L2140 116.7 L2160 110.0 L2180 103.3 L2200 97.0 L2220 91.6 L2240 87.5 L2260 84.9 L2280 84.0 L2300 84.9 L2320 87.5 L2340 91.6 L2360 97.0 L2380 103.3 L2400 110.0 L2420 116.7 L2440 123.0 L2460 128.4 L2480 132.5 L2500 135.1 L2520 136.0 L2540 135.1 L2560 132.5 L2580 128.4 L2600 123.0 L2620 116.7 L2640 110.0 L2660 103.3 L2680 97.0 L2700 91.6 L2720 87.5 L2740 84.9 L2760 84.0 L2780 84.9 L2800 87.5 L2820 91.6 L2840 97.0 L2860 103.3 L2880 110.0 L2880 600 L0 600Z"/>
+        <path class="w2" d="M0 206.8 L20 209.5 L40 209.8 L60 207.8 L80 203.6 L100 197.7 L120 190.9 L140 184.1 L160 177.9 L180 173.2 L200 170.5 L220 170.2 L240 172.2 L260 176.4 L280 182.3 L300 189.1 L320 195.9 L340 202.1 L360 206.8 L380 209.5 L400 209.8 L420 207.8 L440 203.6 L460 197.7 L480 190.9 L500 184.1 L520 177.9 L540 173.2 L560 170.5 L580 170.2 L600 172.2 L620 176.4 L640 182.3 L660 189.1 L680 195.9 L700 202.1 L720 206.8 L740 209.5 L760 209.8 L780 207.8 L800 203.6 L820 197.7 L840 190.9 L860 184.1 L880 177.9 L900 173.2 L920 170.5 L940 170.2 L960 172.2 L980 176.4 L1000 182.3 L1020 189.1 L1040 195.9 L1060 202.1 L1080 206.8 L1100 209.5 L1120 209.8 L1140 207.8 L1160 203.6 L1180 197.7 L1200 190.9 L1220 184.1 L1240 177.9 L1260 173.2 L1280 170.5 L1300 170.2 L1320 172.2 L1340 176.4 L1360 182.3 L1380 189.1 L1400 195.9 L1420 202.1 L1440 206.8 L1460 209.5 L1480 209.8 L1500 207.8 L1520 203.6 L1540 197.7 L1560 190.9 L1580 184.1 L1600 177.9 L1620 173.2 L1640 170.5 L1660 170.2 L1680 172.2 L1700 176.4 L1720 182.3 L1740 189.1 L1760 195.9 L1780 202.1 L1800 206.8 L1820 209.5 L1840 209.8 L1860 207.8 L1880 203.6 L1900 197.7 L1920 190.9 L1940 184.1 L1960 177.9 L1980 173.2 L2000 170.5 L2020 170.2 L2040 172.2 L2060 176.4 L2080 182.3 L2100 189.1 L2120 195.9 L2140 202.1 L2160 206.8 L2180 209.5 L2200 209.8 L2220 207.8 L2240 203.6 L2260 197.7 L2280 190.9 L2300 184.1 L2320 177.9 L2340 173.2 L2360 170.5 L2380 170.2 L2400 172.2 L2420 176.4 L2440 182.3 L2460 189.1 L2480 195.9 L2500 202.1 L2520 206.8 L2540 209.5 L2560 209.8 L2580 207.8 L2600 203.6 L2620 197.7 L2640 190.9 L2660 184.1 L2680 177.9 L2700 173.2 L2720 170.5 L2740 170.2 L2760 172.2 L2780 176.4 L2800 182.3 L2820 189.1 L2840 195.9 L2860 202.1 L2880 206.8 L2880 600 L0 600Z"/>
+        <path class="w3" d="M0 292.7 L20 288.1 L40 281.3 L60 274.2 L80 268.6 L100 266.1 L120 267.3 L140 271.9 L160 278.7 L180 285.8 L200 291.4 L220 293.9 L240 292.7 L260 288.1 L280 281.3 L300 274.2 L320 268.6 L340 266.1 L360 267.3 L380 271.9 L400 278.7 L420 285.8 L440 291.4 L460 293.9 L480 292.7 L500 288.1 L520 281.3 L540 274.2 L560 268.6 L580 266.1 L600 267.3 L620 271.9 L640 278.7 L660 285.8 L680 291.4 L700 293.9 L720 292.7 L740 288.1 L760 281.3 L780 274.2 L800 268.6 L820 266.1 L840 267.3 L860 271.9 L880 278.7 L900 285.8 L920 291.4 L940 293.9 L960 292.7 L980 288.1 L1000 281.3 L1020 274.2 L1040 268.6 L1060 266.1 L1080 267.3 L1100 271.9 L1120 278.7 L1140 285.8 L1160 291.4 L1180 293.9 L1200 292.7 L1220 288.1 L1240 281.3 L1260 274.2 L1280 268.6 L1300 266.1 L1320 267.3 L1340 271.9 L1360 278.7 L1380 285.8 L1400 291.4 L1420 293.9 L1440 292.7 L1460 288.1 L1480 281.3 L1500 274.2 L1520 268.6 L1540 266.1 L1560 267.3 L1580 271.9 L1600 278.7 L1620 285.8 L1640 291.4 L1660 293.9 L1680 292.7 L1700 288.1 L1720 281.3 L1740 274.2 L1760 268.6 L1780 266.1 L1800 267.3 L1820 271.9 L1840 278.7 L1860 285.8 L1880 291.4 L1900 293.9 L1920 292.7 L1940 288.1 L1960 281.3 L1980 274.2 L2000 268.6 L2020 266.1 L2040 267.3 L2060 271.9 L2080 278.7 L2100 285.8 L2120 291.4 L2140 293.9 L2160 292.7 L2180 288.1 L2200 281.3 L2220 274.2 L2240 268.6 L2260 266.1 L2280 267.3 L2300 271.9 L2320 278.7 L2340 285.8 L2360 291.4 L2380 293.9 L2400 292.7 L2420 288.1 L2440 281.3 L2460 274.2 L2480 268.6 L2500 266.1 L2520 267.3 L2540 271.9 L2560 278.7 L2580 285.8 L2600 291.4 L2620 293.9 L2640 292.7 L2660 288.1 L2680 281.3 L2700 274.2 L2720 268.6 L2740 266.1 L2760 267.3 L2780 271.9 L2800 278.7 L2820 285.8 L2840 291.4 L2860 293.9 L2880 292.7 L2880 600 L0 600Z"/>
+      </svg>
     </div>
-  </aside>
+  </div>
+  <div class="shade"></div>
 
-  <main class="center">
-    <div id="coral" class="coral"></div>
-    <p id="banner" class="banner" hidden></p>
-
-    <div id="idle-panel">
-      <div id="durations" class="durations">
-        <button data-min="15">15</button>
-        <button data-min="25" class="selected">25</button>
-        <button data-min="45">45</button>
-        <button data-min="60">60</button>
-        <span>min</span>
-      </div>
-      <button id="start" class="primary big">Start focus</button>
-      <p id="empty-hint" class="hint" hidden>No sites blocked yet. Add some in the Reef popup (toolbar icon, Sites tab).</p>
+  <header class="top">
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 100 100"><use href="#cr"/></svg></span>
+      <span class="wordmark">reef</span>
     </div>
-
-    <div id="active-panel" hidden>
-      <div id="timer" class="timer">00:00</div>
-      <p id="blocking-info" class="hint"></p>
-      <button id="give-up" class="ghost">Give up</button>
-      <div id="confirm-box" class="confirm" hidden>
-        <p>Your coral will bleach and won't join your reef.</p>
-        <div class="row">
-          <button id="keep-going" class="primary">Keep going</button>
-          <button id="confirm-give-up" class="danger">Give up</button>
+    <div class="top-right">
+      <span class="tagline">Make this place yours</span>
+      <div class="menu-wrap">
+        <button id="scene-btn" class="btn-outline" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M5 7h1a2 2 0 0 0 2-2a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-14a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2"/><circle cx="12" cy="13" r="3"/></svg>
+          Choose a scene
+        </button>
+        <div id="scene-menu" class="menu" hidden>
+          <div class="eyebrow">Scenes</div>
+          <div id="thumbs" class="thumbs"></div>
+          <button id="upload-btn" class="btn-outline wide">Upload your own image</button>
+          <p class="hint small">Or drag an image anywhere onto this page.</p>
+          <p id="scene-error" class="error" hidden></p>
+          <input id="file" type="file" accept="image/*" hidden>
         </div>
       </div>
+      <button id="reset-btn" class="btn-outline icon-only" title="Restore default scene" aria-label="Restore default scene">
+        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M19.95 11a8 8 0 1 0-.5 4m.5 5v-5h-5"/></svg>
+      </button>
     </div>
+  </header>
+
+  <main class="stage">
+    <section class="hero">
+      <div id="date" class="eyebrow date"></div>
+      <h1 id="greeting"></h1>
+      <div id="clock" class="clock"></div>
+      <p id="quote" class="quote"></p>
+    </section>
+
+    <section class="cards">
+      <article class="card">
+        <div class="head">
+          <span class="eyebrow">Focus</span>
+          <span id="blocking-count" class="meta"></span>
+        </div>
+        <div class="focus-body">
+          <div id="coral" class="coral"></div>
+          <div class="focus-ctl">
+            <p id="banner" class="banner" hidden></p>
+
+            <div id="idle-panel">
+              <div id="durations" class="durations">
+                <button data-min="15">15</button>
+                <button data-min="25" class="selected">25</button>
+                <button data-min="45">45</button>
+                <button data-min="60">60</button>
+                <span>min</span>
+              </div>
+              <button id="start" class="btn-primary">Start focus</button>
+              <p id="empty-hint" class="hint small" hidden>No sites blocked yet. Add some in the Reef popup (toolbar icon, Sites tab).</p>
+            </div>
+
+            <div id="active-panel" hidden>
+              <div id="timer" class="timer">00:00</div>
+              <p id="blocking-info" class="hint"></p>
+              <button id="give-up" class="btn-outline">Give up</button>
+              <div id="confirm-box" class="confirm" hidden>
+                <p>Your coral will bleach and won't join your reef.</p>
+                <div class="row">
+                  <button id="keep-going" class="btn-primary aqua">Keep going</button>
+                  <button id="confirm-give-up" class="btn-outline">Give up</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="eyebrow">A clear place to begin</div>
+        <div class="head title-row">
+          <h2>Your list</h2>
+          <span id="open-count" class="meta"></span>
+        </div>
+        <form id="todo-form" class="add">
+          <input id="todo-title" type="text" placeholder="What needs your attention?" autocomplete="off">
+          <button type="button" id="tag-toggle" class="tag-toggle" aria-pressed="false" title="Ask me to confirm when I send an email in Gmail">Send email</button>
+          <button type="submit" class="plus" aria-label="Add to-do">
+            <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </form>
+        <p id="todo-error" class="error" hidden></p>
+        <ul id="todo-open" class="list"></ul>
+        <p id="todo-empty" class="hint" hidden>Nothing to do. Nice.</p>
+        <details>
+          <summary>Done (<span id="done-count">0</span>)</summary>
+          <ul id="todo-done" class="list done"></ul>
+        </details>
+        <p class="hint small">Tag a to-do "Send email" and Reef asks you to confirm it when you send an email in Gmail. It never reads your emails.</p>
+      </article>
+    </section>
   </main>
 
-  <aside class="panel todo-panel">
-    <h2>To-do</h2>
-    <form id="todo-form" class="row">
-      <input id="todo-title" type="text" placeholder="Add a to-do" autocomplete="off">
-      <select id="todo-tag" title="Auto-detect">
-        <option value="none">No tag</option>
-        <option value="email">Send email</option>
-      </select>
-      <button class="primary" type="submit">Add</button>
-    </form>
-    <p id="todo-error" class="error" hidden></p>
-    <ul id="todo-open" class="list"></ul>
-    <p id="todo-empty" class="hint" hidden>Nothing to do. Nice.</p>
-    <details id="done-details">
-      <summary>Done (<span id="done-count">0</span>)</summary>
-      <ul id="todo-done" class="list done"></ul>
-    </details>
-  </aside>
-
-  <footer class="seabed">
+  <footer class="bottom">
+    <div id="stats-line" class="stats-line"></div>
     <div id="reef" class="reef"></div>
-    <div class="sand"><span id="reef-count"></span></div>
+    <div id="reef-count" class="stats-line"></div>
   </footer>
 
   <script src="shared.js"></script>

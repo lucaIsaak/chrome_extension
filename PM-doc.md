@@ -83,12 +83,16 @@ The extension notices when you did the work and asks you to confirm.
 ### F8: New tab page
 Reef is the first thing you see in every new tab.
 
-- [ ] Opening a new tab shows the Reef page full screen (ocean background) instead of Chrome's default new tab.
-- [ ] It shows the clock, the current coral, the focus timer with a duration choice (15/25/45/60) and Start button.
+- [ ] Opening a new tab shows the Reef page full screen instead of Chrome's default new tab.
+- [ ] It shows the date, a time-of-day greeting, a large clock and a short quote on the left.
+- [ ] A Focus card shows the coral, the duration choice (15/25/45/60) and the Start button. While a session runs it shows the countdown and a Give up button.
 - [ ] Give up works the same as in the popup (confirmation, then the coral bleaches).
-- [ ] Today's stats and the to-do list (add, complete, delete, tag) are on the page and stay in sync with the popup.
-- [ ] The reef along the seabed shows the corals collected from completed sessions.
+- [ ] A "Your list" card lets the user add, complete and delete to-dos and tag them "Send email". It stays in sync with the popup.
+- [ ] The footer shows today's stats and the corals collected from completed sessions.
 - [ ] While a session is running, the timer and coral keep updating without reloading the tab.
+- [ ] "Choose a scene" lets the user pick one of three built-in backgrounds (Dusk, Deep sea, Sunset) or upload their own image.
+- [ ] An image can also be dragged and dropped onto the page to become the background.
+- [ ] The chosen scene is still there after restarting Chrome, and the reset button restores the default.
 - [ ] Managing blocked sites stays in the popup (Sites tab).
 
 ## 3. Technical notes (for the build)
