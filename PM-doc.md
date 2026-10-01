@@ -147,11 +147,36 @@ Reef also shows **what websites collect about you** and what they could **infer*
 - [ ] **Blocked requests are counted** per day and per site, so the report can say how many were stopped.
 - [ ] **"Is this you?" feedback:** every twin guess has Right and Wrong buttons. A wrong guess is struck through, the avatar drops the matching detail (outfit, props), and the stage shows "you rated N guesses: M wrong". Answers fade after 30 days.
 - [ ] **Weekly privacy report** at the top of Footprint: companies that watched the user this week, change versus the previous week, worst site, top watcher and requests stopped by Reef. It says "first week" until there are two weeks of data.
+- [ ] **Top-right tools on the 3D stage:** the "Share my twin" button (with a share icon) and, to its right, a round info icon. The rotate/zoom/reset instructions are hidden and appear in a tooltip when the user hovers or focuses the info icon.
 - [ ] **Shareable twin card:** a "Share my twin" button on the 3D stage opens a preview of a 1200x630 image (avatar plus guesses). Location, device and languages are unticked by default. An example-data switch avoids showing real browsing. Download PNG or Copy image. Nothing is uploaded.
 - [ ] **Focus and privacy:** blocked-site chips on the new tab show how many tracking companies usually watch the user there. The Focus session summary says how many visits Reef turned away and how many companies that avoided. A "Your distracting sites" card in Footprint shows the same per site.
 - [ ] **Reef health (0-100)** is computed from companies met this week and the share of tracking blocked. Low health makes the new tab water murkier and the reef corals duller, and the new tab shows "water clarity". Bleaching still only means a given-up session.
+- [ ] The Digital twin details sit in one container with two tabs, each with an icon: "Guesses" (person-search icon: known facts and learned guesses) and "Fingerprint" (fingerprint icon: the uniqueness test). Guesses is shown first.
 - [ ] **Fingerprint test:** a card at the top of the Digital twin list shows a band (blends into a crowd / fairly distinctive / very distinctive / probably unique), how many signals any site can read, how many are rare and how many are protected, plus tips. It is labelled a rough estimate from bundled typical values, with no exact number.
 
+### F13: Avatar network (demo, V2.3)
+Learn how to protect yourself from others' recipes, not from their data. The network is simulated (about 1,000 anonymous avatars and a friends circle) so everything works with no server and nothing leaves the device. A real network would replace only the data source in network.js, and the privacy policy would change first.
+- [ ] A "Network" entry in the Shadow sidebar opens a page with a banner saying the people shown are simulated.
+- [ ] The user's privacy score (0 = worst, 100 = best) is the reef-health score from the weekly report.
+- [ ] The user can join the **global network** and the **friends network** independently. Both are off by default. Joining is how the user sees that ranking.
+- [ ] Rankings are private. The user only sees their own position ("top 16% globally", "2nd of 7 among friends"). No list of other people is ever shown.
+- [ ] Others only ever see an anonymous name (for example Kelp-25), the score, the trackers blocked and the habits ticked. Never sites, browsing or the twin. Two toggles let the user hide the blocklist or the habits. A line shows exactly what others would see.
+- [ ] **In the 3D scene:** the top-left of the Digital twin stage is a switch, "Your digital twin | Your network", with the selected side highlighted. "Your network" shows the user in the middle of the glowing grid with friends around and their friends behind, each a small avatar with a name and score label, coloured coral (low) to aqua (high). The camera fits everyone in view. Avatars can be clicked (not dragged) to select them: a ring marks the selection and a card shows the score, how many companies they block, **Adopt blocklist** and **Full recipe**. If the user has not joined the friends network, the card offers to join. Share my twin is hidden in this view.
+- [ ] **Deselect:** in the 3D network the selected avatar can be deselected with a "Deselect" button on its card, by clicking it again, or with Esc. The flat graph and recipe panel follow.
+- [ ] **Top three glow:** the three best scores in view (the user included) have a pulsing green circle under them: strongest for first place, medium for second, faint but visible for third. The glow size is the same wherever the avatar stands, so rank rather than distance decides how strong it looks. The card text explains the glow.
+- [ ] A graph shows the user in the centre, friends around them and their own friends behind, coloured from coral (low score) to aqua (high). Clicking an avatar shows its recipe.
+- [ ] "Best-protected avatars" (global only) lists three anonymous top recipes.
+- [ ] A recipe shows the companies blocked, the habits with a how-to tip each, and an "Adopt this blocklist" button that blocks the companies the user does not block yet. Adopting can be undone under Blocked trackers.
+- [ ] The user ticks their own habits (tracker blocker extension, privacy browser, third-party cookie blocking, rejecting cookie banners, private search, VPN), because Reef cannot see other extensions.
+
+### F14: Toolkit (V2.4)
+One page for everything the user does to protect themselves from tracking. The sidebar order is Digital twin, Network, Toolkit, Footprint.
+- [ ] **Summary tiles:** privacy score, habits ticked (for example "5 of 9"), trackers blocked, and requests stopped this week.
+- [ ] **Active protections:** what Reef measures itself: tracker blocking (with a link to manage it), focus-mode sites (link to the new tab), recording on or paused, private windows and sensitive sites never recorded, and the retention period.
+- [ ] **Your habits:** the checklist of privacy habits (tracker blocker extensions, privacy browser, third-party cookie blocking, rejecting cookie banners, private search, VPN) with a progress bar and a how-to tip under every unticked habit. It lives here and no longer on the Network page. Reef cannot see other extensions or browser settings, so these are self-declared. What is ticked is also what others see if the user joins a network.
+- [ ] **Suggested next steps:** personalised from the data: the top watching companies that are not blocked yet (with a Block button), no blocker or privacy browser ticked, a very distinctive browser, cookie and banner tips, joining a network, and adding focus sites. At most six, and they disappear once done.
+- [ ] **What moves your score:** shows the score as a starting point of 80, minus points for companies met, plus points for the share of tracking blocked, so the numbers add up.
+- [ ] **Your recipe:** the shareable part (what others would see) with a link to the sharing settings on the Network page.
 ## 3. Technical notes (for the build)
 
 - Manifest V3, plain HTML/CSS/JS, no build step.

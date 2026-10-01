@@ -51,19 +51,33 @@ const Report = (() => {
       sitesSeen: Object.keys(cur.sites).length,
       worstSite: worst ? { site: worst[0], companies: worst[1].size } : null,
       topWatcher: top ? { name: top[0], sites: top[1].size } : null,
+      topCompanies: Object.entries(cur.companies).sort((a, b) => b[1].size - a[1].size).slice(0, 8).map(([name, sites]) => ({ name, sites: sites.size })),
       trackReq: cur.trackReq,
       blocked: cur.blocked,
       blockedBy: cur.blockedBy,
     };
   }
 
+  const BASE = 80; // everyone starts here, then loses points for companies met and wins them back by blocking
+
   // 0..100. Fewer companies watching you and more tracking blocked means a healthier reef.
-  function health(w) {
-    if (!w || !w.hasData) return 60; // neutral until there is something to judge
+  // healthParts shows how the score is made up, health is just the number.
+  function healthParts(w) {
+    if (!w || !w.hasData) return { hasData: false, score: 60 }; // neutral until there is something to judge
     const exposure = Math.min(70, w.companies * 1.4);
     const share = w.blocked / Math.max(1, w.blocked + w.trackReq);
-    return Math.max(10, Math.min(100, Math.round(100 - exposure + Math.min(30, share * 60))));
+    const bonus = Math.min(30, share * 60);
+    return {
+      hasData: true,
+      base: BASE,
+      companies: w.companies,
+      exposure: Math.round(exposure),
+      sharePct: Math.round(share * 100),
+      bonus: Math.round(bonus),
+      score: Math.max(10, Math.min(100, Math.round(BASE - exposure + bonus))),
+    };
   }
+  const health = (w) => healthParts(w).score;
 
-  return { weekly, health, dayKey };
+  return { weekly, health, healthParts, dayKey };
 })();

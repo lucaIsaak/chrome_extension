@@ -1,17 +1,25 @@
 {
   "manifest_version": 3,
   "name": "Reef",
-  "version": "2.2.0",
+  "version": "2.4.0",
   "description": "Grow a coral reef by staying focused, and see what websites collect and could infer about you. Everything stays on your device.",
   "minimum_chrome_version": "111",
-  "permissions": ["storage", "alarms", "declarativeNetRequest", "webRequest", "notifications"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "declarativeNetRequest",
+    "webRequest",
+    "notifications"
+  ],
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -28,28 +36,46 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["gmail-content.js"],
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": [
+        "gmail-content.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["page-hooks.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "page-hooks.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
     },
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["page-bridge.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "page-bridge.js"
+      ],
       "run_at": "document_start",
       "all_frames": true
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["blocked.html"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "blocked.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

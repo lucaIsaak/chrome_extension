@@ -18,6 +18,7 @@
 - Per-day counts of which tracking companies appeared on which sites, to build your weekly report
 - The trackers you chose to block, how many requests that stopped, and how often focus mode turned a visit away
 - Your "right / wrong" answers about the twin's guesses (they fade after 30 days)
+- Your network choices: whether you joined the global or friends network, the sharing options and the privacy habits you ticked
 
 ## What Reef never does
 
@@ -45,6 +46,10 @@
 - Choose how long data is kept: 30 days, 90 days, 1 year or forever. Older data is deleted automatically
 - Export your data, delete a single website, or delete everything, on the "your shadow" page
 - Removing the extension deletes all of its stored data
+
+## The avatar network
+
+The network is currently a **demo with simulated people**. Nothing is sent anywhere. If a real network is ever added, it will be opt-in, will share only an anonymous name, a privacy score and the settings you choose to share (never sites, browsing or your twin), and this policy will be updated before it goes live.
 
 ## Accuracy
 

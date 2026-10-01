@@ -137,6 +137,7 @@ const Trackers = (() => {
     if (TRACKING.has(cat)) (BY_COMPANY[company] = BY_COMPANY[company] || []).push(domain);
   }
   const domainsFor = (company) => BY_COMPANY[company] || [];
+  const companyNames = () => Object.keys(BY_COMPANY); // roughly most prominent first
 
   // blocked = { companies: [name], domains: [domain] } -> every domain to block
   function blockDomains(blocked) {
@@ -155,5 +156,5 @@ const Trackers = (() => {
     return null;
   }
 
-  return { lookup, TRACKING, domainsFor, blockDomains };
+  return { lookup, TRACKING, domainsFor, companyNames, blockDomains };
 })();

@@ -28,9 +28,20 @@ export function createTwinStage(container) {
   scene.fog = new THREE.Fog(NAVY, 14, 46);
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
   const target = new THREE.Vector3(0, 2.0, 0);
-  let camDist = 9;
+  let mode = "twin"; // "twin" or "network"
+  // the network view backs off far enough to fit every avatar, whatever shape the scene is
+  const NET_EXTENT = 8.8;
+  const NET_FOV = 50;
+  const defaultDist = () => (mode === "network" ? Math.min(34, Math.max(14, NET_EXTENT / (Math.tan((NET_FOV * Math.PI) / 360) * camera.aspect))) : 9);
+  let camDist = defaultDist();
   const placeCamera = () => {
-    camera.position.set(0, 3.0, camDist);
+    if (mode === "network") {
+      camera.position.set(0, camDist * 0.5, camDist);
+      target.set(0, 0.8, 0);
+    } else {
+      camera.position.set(0, 3.0, camDist);
+      target.set(0, 2.0, 0);
+    }
     camera.lookAt(target);
   };
   placeCamera();
@@ -173,6 +184,154 @@ export function createTwinStage(container) {
   let orbiters = [];
   let signature = "";
 
+  // ----- network mode: you in the middle, friends around you, their friends behind them -----
+  const netGroup = new THREE.Group();
+  netGroup.visible = false;
+  spin.add(netGroup);
+  let netNodes = []; // { id, group }
+  let pulses = []; // glowing circles under the top three: { mats: [[material, baseOpacity]], phase }
+  let selectRing = null;
+  let netSignature = "";
+  let onNodeSelect = () => {};
+  const scoreColor = (score) => new THREE.Color().setHSL((5 + 165 * (score / 100)) / 360, 0.7, 0.6); // coral = low, aqua = high
+
+  function clearNet() {
+    netGroup.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        for (const m of [].concat(o.material)) {
+          if (m.map) m.map.dispose();
+          m.dispose();
+        }
+      }
+    });
+    netGroup.clear();
+    netNodes = [];
+    pulses = [];
+    selectRing = null;
+  }
+
+  // glow: 0 = none, otherwise 1 (best), 0.65 or 0.4 (weaker, but still easy to spot)
+  function miniFigure(color, scale, label, id, glow = 0) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.5, 6, 14), mat(color));
+    body.position.y = 0.7;
+    body.userData.id = id;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 16), mat(0xcfe0e8));
+    head.position.y = 1.55;
+    head.userData.id = id;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.82, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = -0.2;
+    const tex = textTexture(label, { font: '500 54px -apple-system, "Segoe UI", Roboto, sans-serif', color: "#eaf6f8", glow: "#040b1d", w: 512, h: 128 });
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+    sprite.scale.set(3.0, 0.75, 1);
+    sprite.position.y = 2.35;
+    g.add(body, head, ring, sprite);
+    if (glow) {
+      const green = 0x4dff88;
+      const additive = { color: green, transparent: true, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false };
+      const discMat = new THREE.MeshBasicMaterial({ ...additive, opacity: 0.5 * glow });
+      // sized in scene units (not relative to the figure), so first place looks biggest wherever it stands
+      const R = (0.75 + glow * 0.75) / scale;
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(R, 48), discMat);
+      const haloMat = new THREE.MeshBasicMaterial({ ...additive, opacity: 0.95 * glow });
+      const halo = new THREE.Mesh(new THREE.RingGeometry(R, R + 0.14 / scale, 48), haloMat);
+      for (const m of [disc, halo]) {
+        m.rotation.x = -Math.PI / 2;
+        m.position.y = -0.19;
+        g.add(m);
+      }
+      pulses.push({ mats: [[discMat, 0.5 * glow], [haloMat, 0.95 * glow]], phase: pulses.length * 0.9 });
+    }
+    g.scale.setScalar(scale);
+    return g;
+  }
+
+  function setSelected(id) {
+    if (!selectRing) return;
+    const n = netNodes.find((x) => x.id === id);
+    selectRing.visible = !!n;
+    if (!n) return;
+    selectRing.position.set(n.group.position.x, -0.15, n.group.position.z);
+    selectRing.scale.setScalar(n.group.scale.x);
+  }
+
+  // nodes: [{ id, name, score, ring (1 or 2), parent }]
+  function setNetwork({ nodes, myScore, selectedId, onSelect }) {
+    onNodeSelect = onSelect || (() => {});
+    const sig = JSON.stringify([myScore, nodes.map((n) => [n.id, n.score])]);
+    if (sig === netSignature) return setSelected(selectedId); // nothing changed, only the highlight might have
+    netSignature = sig;
+    clearNet();
+    const R1 = 4.4;
+    const R2 = 7.6;
+    const ring1 = nodes.filter((n) => n.ring === 1);
+    const pos = {};
+    ring1.forEach((n, i) => {
+      const a = (i / ring1.length) * Math.PI * 2 - Math.PI / 2;
+      pos[n.id] = { x: Math.cos(a) * R1, z: Math.sin(a) * R1, a };
+    });
+    for (const f of ring1) {
+      const kids = nodes.filter((n) => n.parent === f.id);
+      kids.forEach((k, j) => {
+        const a = pos[f.id].a + (j - (kids.length - 1) / 2) * 0.34;
+        pos[k.id] = { x: Math.cos(a) * R2, z: Math.sin(a) * R2 };
+      });
+    }
+    // the three best scores in view (you included) get a pulsing green circle: strong, medium, faint
+    const podium = [{ id: "me", score: myScore }, ...nodes.map((n) => ({ id: n.id, score: n.score }))]
+      .sort((a, b) => b.score - a.score || String(a.id).localeCompare(String(b.id)))
+      .slice(0, 3);
+    const glowFor = (id) => [1, 0.65, 0.4][podium.findIndex((p) => p.id === id)] || 0;
+    const me = miniFigure(AQUA, 1.4, `You · ${myScore}`, "me", glowFor("me"));
+    netGroup.add(me);
+    netNodes.push({ id: "me", group: me });
+    const pts = [];
+    for (const n of nodes) {
+      const from = n.parent === "me" ? { x: 0, z: 0 } : pos[n.parent];
+      if (from && pos[n.id]) pts.push(from.x, 0.8, from.z, pos[n.id].x, 0.8, pos[n.id].z);
+    }
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    netGroup.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4e9fd0, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending })));
+    for (const n of nodes) {
+      const p = pos[n.id];
+      if (!p) continue;
+      const fig = miniFigure(scoreColor(n.score), n.ring === 1 ? 1.05 : 0.78, `${n.name} · ${n.score}`, n.id, glowFor(n.id));
+      fig.position.set(p.x, 0, p.z);
+      netGroup.add(fig);
+      netNodes.push({ id: n.id, group: fig });
+    }
+    selectRing = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.12, 48), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false }));
+    selectRing.rotation.x = -Math.PI / 2;
+    selectRing.visible = false;
+    netGroup.add(selectRing);
+    setSelected(selectedId);
+  }
+
+  function setMode(next) {
+    if (next === mode) return;
+    mode = next;
+    rig.visible = mode === "twin";
+    netGroup.visible = mode === "network";
+    camera.fov = mode === "network" ? NET_FOV : 42;
+    camera.updateProjectionMatrix();
+    camDist = defaultDist();
+    pitch = mode === "network" ? 0.2 : 0;
+    placeCamera();
+  }
+
+  const raycaster = new THREE.Raycaster();
+  function nodeAt(clientX, clientY) {
+    scene.updateMatrixWorld(true); // current transforms even if no frame was drawn since the last change
+    camera.updateMatrixWorld(true);
+    const r = renderer.domElement.getBoundingClientRect();
+    raycaster.setFromCamera(new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), camera);
+    const hit = raycaster.intersectObjects(netGroup.children, true).find((h) => h.object.userData && h.object.userData.id);
+    return hit ? hit.object.userData.id : null;
+  }
+
   function disposeModel() {
     if (!model) return;
     model.traverse((o) => {
@@ -212,7 +371,9 @@ export function createTwinStage(container) {
   const clampPitch = (p) => Math.max(-0.35, Math.min(0.55, p));
   const touched = () => (lastTouch = performance.now());
 
+  let downAt = null;
   dom.addEventListener("pointerdown", (e) => {
+    downAt = { x: e.clientX, y: e.clientY };
     dragging = true;
     lastX = e.clientX;
     lastY = e.clientY;
@@ -221,7 +382,10 @@ export function createTwinStage(container) {
     touched();
   });
   dom.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
+    if (!dragging) {
+      if (mode === "network") dom.style.cursor = nodeAt(e.clientX, e.clientY) ? "pointer" : "grab";
+      return;
+    }
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
     lastX = e.clientX;
@@ -236,14 +400,21 @@ export function createTwinStage(container) {
     dom.style.cursor = "grab";
     if (e && dom.hasPointerCapture(e.pointerId)) dom.releasePointerCapture(e.pointerId);
   };
-  dom.addEventListener("pointerup", endDrag);
+  dom.addEventListener("pointerup", (e) => {
+    const click = downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 5; // a click, not a drag
+    endDrag(e);
+    if (click && mode === "network") {
+      const id = nodeAt(e.clientX, e.clientY);
+      if (id && id !== "me") onNodeSelect(id);
+    }
+  });
   dom.addEventListener("pointercancel", endDrag);
   dom.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault(); // two-finger trackpad scroll rotates the model instead of scrolling the page
       if (e.ctrlKey) {
-        camDist = Math.max(5.5, Math.min(13, camDist + e.deltaY * 0.03)); // pinch to zoom
+        camDist = mode === "network" ? Math.max(10, Math.min(40, camDist + e.deltaY * 0.08)) : Math.max(5.5, Math.min(13, camDist + e.deltaY * 0.03)); // pinch to zoom
         placeCamera();
       } else {
         yaw += e.deltaX * 0.008;
@@ -255,9 +426,9 @@ export function createTwinStage(container) {
   );
   dom.addEventListener("dblclick", () => {
     yaw = 0.5;
-    pitch = 0;
+    pitch = mode === "network" ? 0.2 : 0;
     velYaw = 0;
-    camDist = 9;
+    camDist = defaultDist();
     placeCamera();
   });
   container.addEventListener("keydown", (e) => {
@@ -299,7 +470,12 @@ export function createTwinStage(container) {
     }
     spin.rotation.y = yaw;
     spin.rotation.x = pitch;
-    rig.position.y = 1.15 + Math.sin(t * 1.3) * 0.12;
+    rig.position.y = 0.85 + Math.sin(t * 1.3) * 0.1; // floats a little lower so the label clears the tabs
+    if (mode === "network") for (const p of pulses) {
+      const k = 0.62 + 0.38 * Math.sin(t * 2.4 + p.phase); // slow pulse
+      for (const [mat, base] of p.mats) mat.opacity = base * k;
+    }
+    if (mode === "network") for (const n of netNodes) n.group.position.y = Math.sin(t * 1.1 + n.group.position.x * 0.7) * 0.07;
     stars.rotation.y = t * 0.004;
     ring.scale.setScalar(1 + Math.sin(t * 1.5) * 0.03);
     ring2.rotation.z = t * 0.2;
@@ -318,6 +494,7 @@ export function createTwinStage(container) {
     cancelAnimationFrame(raf);
     ro.disconnect();
     disposeModel();
+    clearNet();
     renderer.dispose();
     renderer.domElement.remove();
   }
@@ -328,7 +505,20 @@ export function createTwinStage(container) {
     return renderer.domElement.toDataURL("image/png");
   }
 
-  return { setTwin, setTheme, snapshot, dispose };
+  // screen position of an avatar (used for tests and to place hints)
+  function projectNode(id) {
+    const n = netNodes.find((x) => x.id === id);
+    if (!n) return null;
+    const v = new THREE.Vector3();
+    camera.updateMatrixWorld(true); // correct even if no frame has been drawn yet
+    n.group.getWorldPosition(v);
+    v.y += 1;
+    v.project(camera);
+    const r = renderer.domElement.getBoundingClientRect();
+    return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+  }
+
+  return { setTwin, setTheme, setMode, setNetwork, setSelected, projectNode, snapshot, dispose };
 }
 
 // ===== model builders =====
@@ -448,7 +638,7 @@ function buildAvatar(group, avatar, orbiters) {
   const hairTex = textTexture("hair: ?", { font: "italic 64px Georgia, serif", color: "#8fb8cc", glow: "#0b2239", w: 512, h: 128 });
   const hair = new THREE.Sprite(new THREE.SpriteMaterial({ map: hairTex, transparent: true, depthWrite: false, fog: false }));
   hair.scale.set(1.6, 0.4, 1);
-  hair.position.set(0, 3.75, 0);
+  hair.position.set(0, 3.62, 0);
   body.add(hair);
   const hairRing = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.012, 6, 40), new THREE.MeshBasicMaterial({ color: 0x8fb8cc, transparent: true, opacity: 0.6 }));
   hairRing.position.set(0, 3.12, 0);

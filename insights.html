@@ -33,6 +33,8 @@
       <div class="eyebrow">Explore</div>
       <div id="tabs" class="sidenav" role="tablist" aria-label="Shadow views">
         <button data-tab="twin" class="active" role="tab"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Digital twin</button>
+        <button data-tab="network" role="tab"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M10 10.5L6.5 7.5M14 10.5l3.5 -3M10 13.5l-3.5 3M14 13.5l3.5 3"/></svg>Network</button>
+        <button data-tab="toolkit" role="tab"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M9 12l2 2l4 -4"/></svg>Toolkit</button>
         <button data-tab="footprint" role="tab"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Footprint</button>
       </div>
     </div>
@@ -89,28 +91,94 @@
       </div>
     </section>
 
+    <!-- Toolkit -->
+    <section id="tab-toolkit" hidden>
+      <p class="lead small">Everything you do to protect yourself from tracking, in one place. Reef measures what it does itself. You tick the habits it cannot see.</p>
+      <div id="tk-summary" class="tiles"></div>
+      <div class="two">
+        <div class="card" id="tk-active"></div>
+        <div class="card" id="tk-habits"></div>
+      </div>
+      <div class="two">
+        <div class="card" id="tk-next"></div>
+        <div class="card" id="tk-score"></div>
+      </div>
+      <div class="card" id="tk-recipe"></div>
+    </section>
+
+    <!-- Network -->
+    <section id="tab-network" hidden>
+      <p class="demo-note">Demo network: the people here are simulated, and nothing you do is sent anywhere. A real network would need a server, and Reef will tell you before that ever changes.</p>
+      <div class="net-grid">
+        <div class="net-left">
+          <div class="card" id="net-graph-wrap">
+            <div class="head"><h2>Your network</h2><span class="hint">anonymous avatars</span></div>
+            <div id="net-graph"></div>
+            <p id="net-graph-msg" class="hint"></p>
+          </div>
+          <div class="card" id="net-top"></div>
+        </div>
+        <div class="net-right">
+          <div class="card" id="net-place"></div>
+          <div class="card" id="net-recipe"></div>
+          <div class="card" id="net-detail"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- Digital twin -->
     <section id="tab-twin">
       <div class="twin-grid">
         <div class="card avatar-card">
           <div id="stage3d" class="stage3d" tabindex="0" role="img" aria-label="3D view of your digital twin. Drag or scroll to rotate."></div>
           <div id="avatar" class="avatar" hidden></div>
-          <div class="stage-top eyebrow">Your digital twin</div>
-          <button id="share" class="share-btn" type="button">Share my twin</button>
-          <div class="stage-hint">Drag or scroll to rotate · double-click to reset</div>
+          <div class="stage-switch" role="tablist" aria-label="3D view">
+            <button type="button" role="tab" data-stage="twin" aria-selected="true">Your digital twin</button>
+            <button type="button" role="tab" data-stage="network" aria-selected="false">Your network</button>
+          </div>
+          <div class="stage-tools">
+            <button id="share" class="share-btn" type="button">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.7 10.7l6.6 -3.4"/><path d="M8.7 13.3l6.6 3.4"/></svg>
+              Share my twin
+            </button>
+            <span class="info-wrap">
+              <button class="info-btn" type="button" aria-label="How to move the twin" aria-describedby="stage-tip">
+                <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg>
+              </button>
+              <span id="stage-tip" class="tip" role="tooltip">Drag or scroll to rotate · pinch to zoom · double-click to reset</span>
+            </span>
+          </div>
+          <div id="stage-net" class="stage-net" hidden></div>
           <div class="stage-bottom">
             <div class="progress"><div id="progress-bar"></div></div>
             <p id="progress-text" class="hint"></p>
           </div>
         </div>
-        <div class="card">
-          <p class="lead small">This is what an ad network could plausibly guess about you from the same signals websites can see. They are crude guesses and often wrong. That is the point.</p>
-          <div id="fp-card" class="fp-card" hidden></div>
-          <h2>Known the moment you open a page</h2>
-          <div id="exposed" class="attrs"></div>
-          <h2>Learned from how you browse</h2>
-          <div id="inferred" class="attrs"></div>
-          <p class="note">Never inferred: political views, sexual orientation, health, religion or ethnicity.</p>
+        <div class="card tabcard">
+          <div class="mini-tabs" role="tablist" aria-label="Twin details">
+            <button type="button" role="tab" data-pane="guesses" aria-selected="true">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h1"/><path d="M15 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M20.2 20.2l1.8 1.8"/></svg>
+              Guesses
+            </button>
+            <button type="button" role="tab" data-pane="fingerprint" aria-selected="false">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M18.9 7a8 8 0 0 1 1.1 5v1a6 6 0 0 0 .8 3"/><path d="M8 11a4 4 0 0 1 8 0v1a10 10 0 0 0 2 6"/><path d="M12 11v2a14 14 0 0 0 2.5 8"/><path d="M8 15a18 18 0 0 0 1.8 6"/><path d="M4.9 19a22 22 0 0 1 -.9 -7v-1a8 8 0 0 1 12 -6.95"/></svg>
+              Fingerprint
+            </button>
+          </div>
+
+          <div id="pane-guesses" role="tabpanel">
+            <p class="lead small">This is what an ad network could plausibly guess about you from the same signals websites can see. They are crude guesses and often wrong. That is the point.</p>
+            <h2>Known the moment you open a page</h2>
+            <div id="exposed" class="attrs"></div>
+            <h2>Learned from how you browse</h2>
+            <div id="inferred" class="attrs"></div>
+            <p class="note">Never inferred: political views, sexual orientation, health, religion or ethnicity.</p>
+          </div>
+
+          <div id="pane-fingerprint" role="tabpanel" hidden>
+            <p class="lead small">Websites can recognise your browser without cookies, just from the details it shows every page. This is how distinctive yours looks.</p>
+            <div id="fp-card" class="fp-card"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -122,6 +190,7 @@
   <script src="categories.js"></script>
   <script src="twin.js"></script>
   <script src="report.js"></script>
+  <script src="network.js"></script>
   <script src="fingerprint.js"></script>
   <script src="sharecard.js"></script>
   <script src="insights.js"></script>

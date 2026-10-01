@@ -35,7 +35,7 @@ const el = (tag, cls, text) => {
 };
 
 async function load() {
-  const stored = await chrome.storage.local.get(["sites", "signals", "settings", "shadowTheme", "footprintView", "blockedTrackers", "signalDays", "focusStats", "blocklist", "twinFeedback"]);
+  const stored = await chrome.storage.local.get(["sites", "signals", "settings", "shadowTheme", "footprintView", "blockedTrackers", "signalDays", "focusStats", "blocklist", "twinFeedback", "networkSettings", "reefHealth"]);
   applyTheme(stored.shadowTheme);
   view = stored.footprintView === "raw" ? "raw" : "decoded";
   const feedback = {};
@@ -49,6 +49,8 @@ async function load() {
     focusStats: stored.focusStats || {},
     blocklist: stored.blocklist || [],
     feedback,
+    score: stored.reefHealth == null ? null : stored.reefHealth,
+    network: { global: false, friends: false, habits: [], shareBlocked: true, shareHabits: true, ...(stored.networkSettings || {}) },
   };
 }
 
@@ -758,13 +760,15 @@ function ensureStage() {
     .then((mod) => {
       stage = mod.createTwinStage($("#stage3d"));
       stage.setTheme(theme);
+      stage.setMode(stageMode);
       $("#avatar").hidden = true;
     })
     .catch(() => {
       stageFailed = true;
       $("#stage3d").hidden = true;
       $("#avatar").hidden = false;
-      $(".stage-hint").hidden = true;
+      $(".stage-tools").hidden = true; // share and the rotate hint both need the 3D scene
+      document.querySelector('.stage-switch button[data-stage="network"]').hidden = true; // the 3D network needs WebGL too
     })
     .finally(() => (stageLoading = null));
   return stageLoading;
@@ -799,11 +803,10 @@ function renderFingerprint() {
   try {
     fpResult = fpResult || Fingerprint.measure();
   } catch {
-    box.hidden = true;
+    box.append(el("p", "hint", "The fingerprint test is not available in this browser."));
     return;
   }
   const r = fpResult;
-  box.hidden = false;
   box.append(el("div", "eyebrow", "How easy is your browser to recognise?"));
   const head = el("div", "fp-head");
   head.append(el("b", "fp-band " + r.band.key, r.band.label), el("span", "reason", r.band.text));
@@ -910,6 +913,514 @@ async function openShare() {
 
 $("#share").addEventListener("click", openShare);
 
+// ---------- Network: anonymous scores and protection recipes ----------
+const SVGNS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs = {}) => {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+};
+const scoreColor = (s) => `hsl(${Math.round(5 + 165 * (s / 100))},70%,60%)`; // low = coral, high = aqua
+const ordinal = (n) => n + (["th", "st", "nd", "rd"][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10 < 4 ? n % 10 : 0]);
+const myScore = () => (data.score == null ? 60 : data.score);
+let netSelected = null;
+let netNote = "";
+
+function saveNetwork(patch) {
+  const next = { ...data.network, ...patch };
+  if ((next.global || next.friends) && !next.anonId) next.anonId = Math.random().toString(36).slice(2, 8);
+  data.network = next;
+  chrome.storage.local.set({ networkSettings: next });
+  netSelected = null;
+  netNote = "";
+  renderNetwork();
+  renderToolkit();
+  syncStageNetwork();
+}
+
+function netToggle(title, text, checked, onChange) {
+  const label = el("label", "net-toggle");
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = checked;
+  cb.addEventListener("change", () => onChange(cb.checked));
+  const copy = el("span");
+  copy.append(el("b", "", title), el("small", "", text));
+  label.append(cb, copy);
+  return label;
+}
+
+function renderNetwork() {
+  const snap = Network.snapshot({ score: myScore(), settings: data.network });
+  renderNetPlace(snap);
+  renderNetRecipe();
+  renderNetGraph(snap);
+  renderNetTop(snap);
+  renderNetDetail(snap);
+}
+
+function renderNetPlace(snap) {
+  const box = $("#net-place");
+  box.replaceChildren();
+  box.append(el("div", "eyebrow", "Your place"));
+  const top = el("div", "weekly-top");
+  const big = el("div", "weekly-big");
+  big.append(el("b", "", String(myScore())), el("span", "", " privacy score"));
+  top.append(big);
+  if (data.score == null) top.append(el("span", "delta flat", "calibrating"));
+  box.append(top);
+  const lines = el("ul", "clean-list");
+  const line = (text) => lines.append(el("li", "", text));
+  line(snap.global ? `Globally you are in the top ${snap.global.topPercent}% (${ordinal(snap.global.rank)} of ${snap.global.total}).` : "Join the global network to see where you stand among everyone.");
+  line(snap.friends ? `Among your friends you are ${ordinal(snap.friends.rank)} of ${snap.friends.total}.` : "Join your friends network to see where you stand among them.");
+  box.append(lines);
+  box.append(
+    netToggle("Global network", "Anonymous. You see only your own position, never a list of others.", !!data.network.global, (v) => saveNetwork({ global: v })),
+    netToggle("Friends network", "Anonymous names. You see your own place within your circle.", !!data.network.friends, (v) => saveNetwork({ friends: v })),
+    el("p", "hint", "Both are off until you switch them on. Being in a network is how you see its ranking.")
+  );
+}
+
+function renderNetRecipe() {
+  const box = $("#net-recipe");
+  box.replaceChildren();
+  box.append(el("div", "eyebrow", "Your recipe"));
+  const recipe = Network.myRecipe({ score: myScore(), settings: data.network, blockedCompanies: data.blocked.companies || [] });
+  const preview = el("p", "net-preview");
+  if (!recipe) {
+    preview.textContent = "Nothing is shared. You are not in any network.";
+  } else {
+    const parts = [`${recipe.name} · score ${recipe.score}`];
+    if (recipe.blocked.length) parts.push("blocks " + recipe.blocked.join(", "));
+    if (recipe.tools.length) parts.push("uses " + recipe.tools.map(Network.toolLabel).join(", "));
+    preview.textContent = "Others would see: " + parts.join(" · ") + ". Nothing else.";
+  }
+  box.append(preview);
+  box.append(
+    netToggle("Share which trackers I block", "Lets others adopt your blocklist.", data.network.shareBlocked !== false, (v) => saveNetwork({ shareBlocked: v })),
+    netToggle("Share my privacy habits", "Only the ones you tick in your Toolkit.", data.network.shareHabits !== false, (v) => saveNetwork({ shareHabits: v }))
+  );
+  const habitsLink = el("button", "block-btn", "Edit my habits in the Toolkit");
+  habitsLink.type = "button";
+  habitsLink.addEventListener("click", () => gotoTab("toolkit", "#tk-habits"));
+  box.append(habitsLink);
+}
+
+function nodeGlyph(g, r, score) {
+  g.append(
+    svgEl("circle", { r, fill: scoreColor(score), "fill-opacity": (0.18 + (score / 100) * 0.5).toFixed(2), stroke: scoreColor(score), "stroke-width": 2 }),
+    svgEl("circle", { cy: -r * 0.22, r: r * 0.26, fill: "#eaf6f8", "fill-opacity": 0.85 }),
+    svgEl("path", { d: `M${-r * 0.42} ${r * 0.5} A${r * 0.42} ${r * 0.34} 0 0 1 ${r * 0.42} ${r * 0.5}`, fill: "#eaf6f8", "fill-opacity": 0.85 })
+  );
+}
+
+function renderNetGraph(snap) {
+  const host = $("#net-graph");
+  host.replaceChildren();
+  const msg = $("#net-graph-msg");
+  const W = 680;
+  const H = 620;
+  const cx = W / 2;
+  const cy = H / 2;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Your friends network" });
+  svg.setAttribute("class", "net-svg");
+  const nodes = snap.friends ? snap.friends.nodes : [];
+  const pos = {};
+  const ring1 = nodes.filter((n) => n.ring === 1);
+  ring1.forEach((n, i) => {
+    const a = (-90 + i * (360 / ring1.length)) * (Math.PI / 180);
+    pos[n.id] = { x: cx + Math.cos(a) * 150, y: cy + Math.sin(a) * 150, a };
+  });
+  for (const f of ring1) {
+    const kids = nodes.filter((n) => n.parent === f.id);
+    kids.forEach((k, j) => {
+      const a = pos[f.id].a + (j - (kids.length - 1) / 2) * 0.34;
+      pos[k.id] = { x: cx + Math.cos(a) * 262, y: cy + Math.sin(a) * 262 };
+    });
+  }
+  const links = svgEl("g");
+  for (const n of nodes) {
+    const from = n.parent === "me" ? { x: cx, y: cy } : pos[n.parent];
+    if (from && pos[n.id]) links.append(svgEl("line", { x1: from.x, y1: from.y, x2: pos[n.id].x, y2: pos[n.id].y, stroke: "#4e7fa0", "stroke-opacity": 0.45, "stroke-width": n.ring === 1 ? 1.6 : 1 }));
+  }
+  svg.append(links);
+  for (const n of nodes) {
+    const p = pos[n.id];
+    if (!p) continue;
+    const r = n.ring === 1 ? 24 : 16;
+    const g = svgEl("g", { transform: `translate(${p.x} ${p.y})`, tabindex: 0, role: "button", "aria-label": `${n.name}, score ${n.score}` });
+    g.setAttribute("class", "net-node" + (netSelected === n.id ? " selected" : ""));
+    nodeGlyph(g, r, n.score);
+    const label = svgEl("text", { y: r + 14, "text-anchor": "middle", "font-size": 11 });
+    label.textContent = `${n.name} · ${n.score}`;
+    g.append(label);
+    const choose = () => selectNode(n.id);
+    g.addEventListener("click", choose);
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(); } });
+    svg.append(g);
+  }
+  const me = svgEl("g", { transform: `translate(${cx} ${cy})` });
+  me.setAttribute("class", "net-me");
+  nodeGlyph(me, 32, myScore());
+  me.firstChild.setAttribute("stroke", "#7fe0d4");
+  me.firstChild.setAttribute("stroke-width", 3);
+  const meLabel = svgEl("text", { y: 48, "text-anchor": "middle", "font-size": 12 });
+  meLabel.textContent = `You · ${myScore()}`;
+  me.append(meLabel);
+  svg.append(me);
+  host.append(svg);
+  msg.textContent = snap.friends ? "Coral means a low privacy score, aqua a high one. Click an avatar to see its recipe." : "Join your friends network (right) to see the avatars around you.";
+  $("#net-graph-wrap").classList.toggle("dim", !snap.friends);
+}
+
+function renderNetTop(snap) {
+  const box = $("#net-top");
+  box.replaceChildren();
+  box.append(el("h2", "", "Best-protected avatars"));
+  if (!snap.global) {
+    box.append(el("p", "hint", "Join the global network to see what the best-protected avatars do. They are anonymous: you see their score and their settings, nothing else."));
+    return;
+  }
+  const ul = el("ul", "clean-list");
+  for (const p of snap.topRecipes) {
+    const li = el("li");
+    const text = el("span", "grow");
+    text.append(el("b", "", p.name), el("span", "reason", ` score ${p.score} · blocks ${p.blocked.length} · ${p.tools.length ? p.tools.map(Network.toolLabel).join(", ") : "no habits shared"}`));
+    const view = el("button", "block-btn", "View recipe");
+    view.type = "button";
+    view.addEventListener("click", () => { netSelected = p.id; netNote = ""; renderNetGraph(snap); renderNetDetail(snap); $("#net-detail").scrollIntoView({ behavior: "smooth", block: "nearest" }); });
+    li.append(text, view);
+    ul.append(li);
+  }
+  box.append(ul);
+}
+
+function renderNetDetail(snap) {
+  const box = $("#net-detail");
+  box.replaceChildren();
+  box.append(el("div", "eyebrow", "Recipe"));
+  const pool = [...(snap.friends ? snap.friends.nodes : []), ...snap.topRecipes];
+  let node = pool.find((n) => n.id === netSelected);
+  if (!node && pool.length) node = [...pool].sort((a, b) => b.score - a.score)[0];
+  if (!node) {
+    box.append(el("p", "hint", "Join a network to see anonymous avatars and what they do to stay private. You learn how to hide; your twin never learns anything about them."));
+    return;
+  }
+  const head = el("div", "weekly-top");
+  const big = el("div", "weekly-big");
+  big.append(el("b", "", node.name), el("span", "", " · anonymous avatar"));
+  const pill = el("span", "delta flat", `score ${node.score}`);
+  pill.style.color = scoreColor(node.score);
+  pill.style.borderColor = scoreColor(node.score);
+  head.append(big, pill);
+  box.append(head);
+
+  const blocked = data.blocked.companies || [];
+  box.append(el("h3", "net-sub", node.blocked.length ? `Blocks ${node.blocked.length} tracking compan${node.blocked.length === 1 ? "y" : "ies"}` : "Blocks no companies"));
+  const chips = el("div", "block-row");
+  for (const c of node.blocked) chips.append(el("span", "chip " + (blocked.includes(c) ? "analytics" : "advertising"), blocked.includes(c) ? c + " ✓" : c));
+  box.append(chips);
+  const mine = Network.toAdopt(node, blocked);
+  const adopt = el("button", "net-adopt", mine.length ? `Adopt this blocklist (${mine.length} new)` : node.blocked.length ? "You already block all of these" : "Nothing to adopt");
+  adopt.type = "button";
+  adopt.disabled = !mine.length;
+  adopt.addEventListener("click", async () => {
+    for (const c of mine) await chrome.runtime.sendMessage({ type: "blockTracker", company: c });
+    netNote = `Now blocking ${mine.length} more compan${mine.length === 1 ? "y" : "ies"}. You can undo any of them in Footprint, under Blocked trackers.`;
+    await load();
+    render();
+  });
+  box.append(adopt);
+  if (netNote) box.append(el("p", "hint", netNote));
+
+  box.append(el("h3", "net-sub", "Habits"));
+  if (node.tools.length) {
+    const ul = el("ul", "clean-list tips");
+    for (const id of node.tools) {
+      const tool = Network.TOOLS.find((t) => t.id === id);
+      if (tool) ul.append(el("li", "", `${tool.label}: ${tool.tip}`));
+    }
+    box.append(ul);
+  } else {
+    box.append(el("p", "hint", "This avatar did not share any habits."));
+  }
+  box.append(el("p", "hint", "You only see this avatar's score and settings. Not its sites, not its twin."));
+}
+
+// ---------- 3D scene mode: your digital twin | your network ----------
+let stageMode = "twin";
+
+function setStageMode(mode) {
+  stageMode = mode;
+  for (const b of document.querySelectorAll(".stage-switch button")) b.setAttribute("aria-selected", String(b.dataset.stage === mode));
+  const net = mode === "network";
+  $(".stage-bottom").hidden = net;
+  $("#share").hidden = net;
+  $("#stage-tip").textContent = net
+    ? "Drag or scroll to rotate · pinch to zoom · click an avatar to see its recipe · double-click to reset"
+    : "Drag or scroll to rotate · pinch to zoom · double-click to reset";
+  if (stage) stage.setMode(mode);
+  syncStageNetwork();
+}
+
+// Pick an avatar, from the 3D scene or the flat graph, and show it everywhere
+// Clicking the avatar that is already selected deselects it
+function selectNode(id) {
+  setSelectedNode(id === netSelected ? null : id);
+}
+
+function setSelectedNode(id) {
+  netSelected = id;
+  netNote = "";
+  const snap = Network.snapshot({ score: myScore(), settings: data.network });
+  renderNetGraph(snap);
+  renderNetDetail(snap);
+  if (stage) stage.setSelected(netSelected);
+  renderStageOverlay(snap);
+}
+
+async function adoptRecipe(node) {
+  const mine = Network.toAdopt(node, data.blocked.companies || []);
+  for (const c of mine) await chrome.runtime.sendMessage({ type: "blockTracker", company: c });
+  netNote = `Now blocking ${mine.length} more compan${mine.length === 1 ? "y" : "ies"}. Undo any of them in Footprint, under Blocked trackers.`;
+  await load();
+  render();
+}
+
+function renderStageOverlay(snap) {
+  const box = $("#stage-net");
+  box.replaceChildren();
+  if (!snap.friends) {
+    box.append(el("p", "", "Join your friends network to see the avatars around you. The people here are simulated, nothing leaves your device."));
+    const join = el("button", "primary", "Join friends network");
+    join.type = "button";
+    join.addEventListener("click", () => saveNetwork({ friends: true }));
+    box.append(join);
+    return;
+  }
+  const node = snap.friends.nodes.find((n) => n.id === netSelected);
+  if (!node) {
+    box.append(el("p", "", "Click an avatar to see what it does to stay private. Coral is a low privacy score, aqua a high one. The three pulsing green circles mark the best-protected avatars, the brightest being the best."));
+    return;
+  }
+  const mine = Network.toAdopt(node, data.blocked.companies || []);
+  const row = el("div", "row");
+  const name = el("span", "grow");
+  name.append(el("b", "", node.name), el("small", "", `  score ${node.score} · blocks ${node.blocked.length}`));
+  const deselect = el("button", "", "✕ Deselect");
+  deselect.type = "button";
+  deselect.title = "Clear the selection (Esc)";
+  deselect.addEventListener("click", () => setSelectedNode(null));
+  const adopt = el("button", "primary", mine.length ? `Adopt blocklist (${mine.length} new)` : "Nothing new to adopt");
+  adopt.type = "button";
+  adopt.disabled = !mine.length;
+  adopt.addEventListener("click", () => adoptRecipe(node));
+  const full = el("button", "", "Full recipe");
+  full.type = "button";
+  full.addEventListener("click", () => document.querySelector('#tabs button[data-tab="network"]').click());
+  row.append(name, adopt, full, deselect);
+  box.append(row);
+  if (netNote) box.append(el("p", "", netNote));
+}
+
+function syncStageNetwork() {
+  const box = $("#stage-net");
+  box.hidden = stageMode !== "network";
+  if (stageMode !== "network") return;
+  const snap = Network.snapshot({ score: myScore(), settings: data.network });
+  if (stage) stage.setNetwork({ nodes: snap.friends ? snap.friends.nodes : [], myScore: myScore(), selectedId: netSelected, onSelect: selectNode });
+  renderStageOverlay(snap);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && stageMode === "network" && netSelected && !document.querySelector("dialog[open]")) setSelectedNode(null);
+});
+
+document.querySelector(".stage-switch").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-stage]");
+  if (b) setStageMode(b.dataset.stage);
+});
+
+// ---------- Toolkit: what you do to protect yourself ----------
+const BLOCKER_HABITS = ["ublock", "badger", "ghostery", "firefox", "brave"];
+
+function gotoTab(name, scrollTo) {
+  document.querySelector(`#tabs button[data-tab="${name}"]`).click();
+  if (scrollTo) setTimeout(() => $(scrollTo).scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+}
+
+// Habits are kept with the network settings, so a ticked habit is also what others would see
+function saveHabits(habits) {
+  data.network = { ...data.network, habits };
+  chrome.storage.local.set({ networkSettings: data.network });
+  renderToolkit();
+  renderNetwork();
+  syncStageNetwork();
+}
+
+function actionButton(text, onClick) {
+  const b = el("button", "block-btn", text);
+  b.type = "button";
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function toolkitSuggestions() {
+  const out = [];
+  const w = Report.weekly(data.days);
+  const blocked = data.blocked.companies || [];
+  const habits = data.network.habits || [];
+  const tool = (id) => Network.TOOLS.find((t) => t.id === id);
+
+  // 1. the companies that watched you most and are not blocked yet
+  for (const c of (w.topCompanies || []).filter((c) => !blocked.includes(c.name) && Trackers.domainsFor(c.name).length).slice(0, 3)) {
+    out.push({ text: `${c.name} watched you on ${c.sites} site${c.sites === 1 ? "" : "s"} this week, and you do not block it.`, action: blockButton({ company: c.name }) });
+  }
+  // 2. no tracker blocker or privacy browser ticked
+  if (!BLOCKER_HABITS.some((h) => habits.includes(h))) {
+    out.push({ text: `You have not ticked a tracker blocker or a privacy browser. ${tool("ublock").tip}`, action: actionButton("Open habits", () => $("#tk-habits").scrollIntoView({ behavior: "smooth", block: "start" })) });
+  }
+  // 3. a very distinctive browser
+  try {
+    fpResult = fpResult || Fingerprint.measure();
+    if (fpResult.band.level >= 2 && !habits.includes("firefox") && !habits.includes("brave")) {
+      out.push({ text: "Your browser looks very distinctive to websites, so it can be recognised without cookies. Firefox or Brave blunt several of those signals.", action: actionButton("See why", () => { gotoTab("twin"); document.querySelector('.mini-tabs button[data-pane="fingerprint"]').click(); }) });
+    }
+  } catch {}
+  // 4. cookies and banners
+  for (const id of ["cookies", "banners"]) {
+    if (!habits.includes(id)) out.push({ text: tool(id).tip });
+  }
+  // 5. learn from others, and focus
+  if (!data.network.global && !data.network.friends) {
+    out.push({ text: "Join a network to see what better-protected avatars do. Their recipes can be adopted in one click.", action: actionButton("Open Network", () => gotoTab("network")) });
+  }
+  if (!(data.blocklist || []).length) {
+    out.push({ text: "You have not blocked any distracting sites for focus yet. They usually carry a lot of tracking too.", action: el("a", "block-btn", "Add on new tab") });
+    out[out.length - 1].action.href = "newtab.html";
+  }
+  return out.slice(0, 6);
+}
+
+function tkRow(title, detail, right) {
+  const li = el("li", "tk-row");
+  const text = el("span", "grow");
+  text.append(el("b", "", title), el("span", "reason", " " + detail));
+  li.append(text);
+  if (right) li.append(right);
+  return li;
+}
+
+function renderToolkit() {
+  const w = Report.weekly(data.days);
+  const parts = Report.healthParts(w);
+  const habits = data.network.habits || [];
+  const blockedCount = (data.blocked.companies || []).length + (data.blocked.domains || []).length;
+
+  // summary tiles
+  const tiles = $("#tk-summary");
+  tiles.replaceChildren();
+  for (const [n, label] of [[parts.score, "privacy score"], [`${habits.length} of ${Network.TOOLS.length}`, "habits ticked"], [blockedCount, "trackers you block"], [w.blocked || 0, "requests stopped this week"]]) {
+    const t = el("div", "tile");
+    t.append(el("b", "", String(n)), el("span", "", label));
+    tiles.append(t);
+  }
+
+  // active protections: what Reef itself does and measures
+  const active = $("#tk-active");
+  active.replaceChildren(el("h2", "", "Active protections"), el("p", "hint", "What Reef does for you right now."));
+  const ul = el("ul", "clean-list");
+  const on = (text) => el("span", "chip analytics", text);
+  ul.append(
+    tkRow("Tracker blocking", blockedCount ? `${blockedCount} blocked · ${w.blocked || 0} requests stopped this week` : "nothing blocked yet", actionButton("Manage", () => gotoTab("footprint", "#blocked"))),
+    (() => {
+      const edit = el("a", "block-btn", "Edit on new tab");
+      edit.href = "newtab.html";
+      return tkRow("Focus mode", `${(data.blocklist || []).length} distracting site${(data.blocklist || []).length === 1 ? "" : "s"} blocked during sessions`, edit);
+    })(),
+    tkRow("Recording", data.settings.tracking ? "Shadow is watching what sites collect" : "paused", on(data.settings.tracking ? "on" : "paused")),
+    tkRow("Private windows", "never recorded, even if allowed", on("always")),
+    tkRow("Sensitive sites", "adult, dating, medical and political-party sites are never recorded", on("always")),
+    tkRow("Data retention", data.settings.retentionDays === 0 ? "kept until you delete it" : `deleted after ${data.settings.retentionDays == null ? 90 : data.settings.retentionDays} days`, on("on"))
+  );
+  active.append(ul);
+
+  // habits: self-declared, because Reef cannot see other extensions or browser settings
+  const hab = $("#tk-habits");
+  hab.replaceChildren(el("h2", "", "Your habits"), el("p", "hint", "Reef cannot see your other extensions or browser settings, so you tick what you do."));
+  const prog = el("div", "track");
+  const bar = el("i");
+  bar.style.width = Math.round((habits.length / Network.TOOLS.length) * 100) + "%";
+  prog.append(bar);
+  hab.append(prog);
+  const hl = el("ul", "clean-list");
+  for (const t of Network.TOOLS) {
+    const li = el("li", "tk-habit");
+    const label = el("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = habits.includes(t.id);
+    cb.addEventListener("change", () => {
+      const set = new Set(habits);
+      cb.checked ? set.add(t.id) : set.delete(t.id);
+      saveHabits([...set]);
+    });
+    label.append(cb, " " + t.label);
+    li.append(label);
+    if (!cb.checked) li.append(el("small", "", t.tip));
+    hl.append(li);
+  }
+  hab.append(hl);
+
+  // next steps
+  const next = $("#tk-next");
+  next.replaceChildren(el("h2", "", "Suggested next steps"));
+  const steps = toolkitSuggestions();
+  if (!steps.length) {
+    next.append(el("p", "hint", "Nothing to add. Your toolkit covers the main things."));
+  } else {
+    const nl = el("ul", "clean-list");
+    for (const s of steps) {
+      const li = el("li", "tk-row");
+      li.append(el("span", "grow", s.text));
+      if (s.action) li.append(s.action);
+      nl.append(li);
+    }
+    next.append(nl);
+  }
+
+  // what moves the score
+  const score = $("#tk-score");
+  score.replaceChildren(el("h2", "", "What moves your score"));
+  if (!parts.hasData) {
+    score.append(el("p", "hint", "Browse for a few days with recording on. Until then your score is a neutral 60."));
+  } else {
+    const sl = el("ul", "clean-list");
+    const pts = (n, cls) => el("span", "chip " + cls, n);
+    sl.append(
+      tkRow("Starting point", "", el("b", "", String(parts.base))),
+      tkRow(`${parts.companies} compan${parts.companies === 1 ? "y" : "ies"} watched you this week`, "", pts(`−${parts.exposure} points`, "advertising")),
+      tkRow(`You blocked ${parts.sharePct}% of the tracking aimed at you`, "", pts(`+${parts.bonus} points`, "analytics")),
+      tkRow("Your privacy score", "", el("b", "", `${parts.score} / 100`))
+    );
+    score.append(sl, el("p", "hint", "To raise it, block the companies that watch you most (see the next steps). Every blocked request counts towards the share."));
+  }
+
+  // the shareable part
+  const rec = $("#tk-recipe");
+  rec.replaceChildren(el("h2", "", "Your recipe"), el("p", "hint", "The part of your toolkit that others could see if you join a network."));
+  const recipe = Network.myRecipe({ score: parts.score, settings: data.network, blockedCompanies: data.blocked.companies || [] });
+  if (!recipe) {
+    rec.append(el("p", "net-preview", "Nothing is shared. You are not in any network."));
+  } else {
+    const bits = [`${recipe.name} · score ${recipe.score}`];
+    if (recipe.blocked.length) bits.push("blocks " + recipe.blocked.join(", "));
+    if (recipe.tools.length) bits.push("uses " + recipe.tools.map(Network.toolLabel).join(", "));
+    rec.append(el("p", "net-preview", "Others would see: " + bits.join(" · ") + ". Nothing else."));
+  }
+  rec.append(actionButton("Sharing settings", () => gotoTab("network")));
+}
+
 // ---------- Controls ----------
 function renderControls() {
   $("#tracking").checked = data.settings.tracking;
@@ -946,12 +1457,20 @@ $("#clear").addEventListener("click", async () => {
   await chrome.storage.local.remove(["sites", "signals", "signalDays"]);
 });
 
+// Tabs inside the twin details card: Guesses | Fingerprint
+document.querySelector(".mini-tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-pane]");
+  if (!btn) return;
+  for (const b of document.querySelectorAll(".mini-tabs button")) b.setAttribute("aria-selected", String(b === btn));
+  for (const name of ["guesses", "fingerprint"]) $("#pane-" + name).hidden = name !== btn.dataset.pane;
+});
+
 $("#tabs").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-tab]");
   if (!btn) return;
   const tab = btn.dataset.tab;
   for (const b of document.querySelectorAll("#tabs button")) b.classList.toggle("active", b.dataset.tab === tab);
-  for (const name of ["footprint", "twin"]) $("#tab-" + name).hidden = name !== tab;
+  for (const name of ["footprint", "twin", "network", "toolkit"]) $("#tab-" + name).hidden = name !== tab;
   history.replaceState(null, "", "#" + tab);
 });
 
@@ -999,6 +1518,9 @@ function render() {
   renderDistracting();
   renderSites(entries);
   renderTwin();
+  renderNetwork();
+  renderToolkit();
+  syncStageNetwork();
 }
 
 // Re-render when data changes, but not while the user is reading an open site
@@ -1013,6 +1535,9 @@ chrome.storage.onChanged.addListener(() => {
       renderBlocked();
       renderDistracting();
       renderTwin();
+      renderNetwork();
+      renderToolkit();
+      syncStageNetwork();
     } else {
       render();
     }
@@ -1024,5 +1549,6 @@ chrome.storage.onChanged.addListener(() => {
   setInterval(checkStatus, 5000);
   await load();
   render();
-  if (location.hash === "#footprint") document.querySelector('#tabs button[data-tab="footprint"]').click();
+  const startTab = location.hash.slice(1);
+  if (["footprint", "network", "toolkit"].includes(startTab)) document.querySelector(`#tabs button[data-tab="${startTab}"]`).click();
 })();
