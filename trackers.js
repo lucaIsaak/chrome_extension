@@ -139,9 +139,15 @@ const Trackers = (() => {
   const domainsFor = (company) => BY_COMPANY[company] || [];
   const companyNames = () => Object.keys(BY_COMPANY); // roughly most prominent first
 
-  // blocked = { companies: [name], domains: [domain] } -> every domain to block
+  // "Block all" (strict level) covers these categories. Social widgets and embeds stay, because blocking them breaks pages.
+  const BLOCK_ALL = new Set(["advertising", "analytics", "session-replay", "data-broker"]);
+  const allDomains = () => Object.keys(LIST).filter((d) => BLOCK_ALL.has(LIST[d][1]));
+  const trackingDomains = () => Object.keys(LIST).filter((d) => TRACKING.has(LIST[d][1]));
+
+  // blocked = { companies: [name], domains: [domain], all: bool } -> every domain to block
   function blockDomains(blocked) {
     const out = new Set((blocked && blocked.domains) || []);
+    if (blocked && blocked.all) allDomains().forEach((d) => out.add(d));
     for (const c of (blocked && blocked.companies) || []) domainsFor(c).forEach((d) => out.add(d));
     return [...out];
   }
@@ -156,5 +162,5 @@ const Trackers = (() => {
     return null;
   }
 
-  return { lookup, TRACKING, domainsFor, companyNames, blockDomains };
+  return { lookup, TRACKING, domainsFor, companyNames, blockDomains, allDomains, trackingDomains };
 })();

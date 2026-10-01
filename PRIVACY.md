@@ -19,6 +19,7 @@
 - The trackers you chose to block, how many requests that stopped, and how often focus mode turned a visit away
 - Your "right / wrong" answers about the twin's guesses (they fade after 30 days)
 - Your network choices: whether you joined the global or friends network, the sharing options and the privacy habits you ticked
+- Your protection settings (level, switches, sites you paused or always open privately) and how many cookies Reef cleaned and when
 
 ## What Reef never does
 
@@ -26,6 +27,7 @@
 - Store page content, passwords, form entries, cookie values or the text of emails
 - Record private (incognito) windows, even if you allow the extension there
 - Record adult, dating, medical or political-party websites
+- Delete anything on its own that you did not switch on: cleaning and rewriting of links only happen after you choose a protection level or press a button, and cookies of sites you sign in to or visit yourself are never cleaned automatically
 - Infer political views, sexual orientation, health, religion or ethnicity
 - Sell or share data. The shareable twin image is made on your device and only leaves it if you download or copy it
 
@@ -36,7 +38,9 @@
 | `storage` | Keeps your settings and data on your device |
 | `alarms` | Ends focus sessions on time and clears old data daily |
 | `notifications` | Tells you when a focus session has finished |
-| `declarativeNetRequest` | Blocks your chosen sites during a focus session, and the tracking companies you choose to block |
+| `declarativeNetRequest` | Blocks your chosen sites during a focus session and the tracking companies you choose to block. If you switch them on, it also removes tracking tags from links, sends the Global Privacy Control and Do Not Track signals, and opens the secure version of sites |
+| `cookies` | Deletes the cookies of tracking companies when you press Clean up or switch on automatic cleaning. Reef never reads cookie values for any other purpose |
+| `browsingData` | Deletes one site's saved data (cookies, local storage) only when you press "Clear everything it stored" for that site. It never touches your history or saved passwords |
 | `webRequest` | Lets Shadow see which third parties a page contacts. It only observes; it never changes or blocks requests |
 | Access to all websites | Needed to redirect blocked sites, observe requests on any site and run the in-page detector that notices fingerprinting. On Gmail, a separate script only notices that a message was sent, to ask whether a to-do is done. It never reads emails |
 

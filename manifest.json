@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Reef",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Grow a coral reef by staying focused, and see what websites collect and could infer about you. Everything stays on your device.",
   "minimum_chrome_version": "111",
   "permissions": [
@@ -9,7 +9,9 @@
     "alarms",
     "declarativeNetRequest",
     "webRequest",
-    "notifications"
+    "notifications",
+    "cookies",
+    "browsingData"
   ],
   "icons": {
     "16": "icons/icon-16.png",

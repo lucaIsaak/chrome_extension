@@ -35,7 +35,7 @@ const el = (tag, cls, text) => {
 };
 
 async function load() {
-  const stored = await chrome.storage.local.get(["sites", "signals", "settings", "shadowTheme", "footprintView", "blockedTrackers", "signalDays", "focusStats", "blocklist", "twinFeedback", "networkSettings", "reefHealth"]);
+  const stored = await chrome.storage.local.get(["sites", "signals", "settings", "shadowTheme", "footprintView", "blockedTrackers", "signalDays", "focusStats", "blocklist", "twinFeedback", "networkSettings", "reefHealth", "protect", "protectStats"]);
   applyTheme(stored.shadowTheme);
   view = stored.footprintView === "raw" ? "raw" : "decoded";
   const feedback = {};
@@ -49,6 +49,8 @@ async function load() {
     focusStats: stored.focusStats || {},
     blocklist: stored.blocklist || [],
     feedback,
+    protect: Protect.normalize(stored.protect),
+    protectStats: stored.protectStats || {},
     score: stored.reefHealth == null ? null : stored.reefHealth,
     network: { global: false, friends: false, habits: [], shareBlocked: true, shareHabits: true, ...(stored.networkSettings || {}) },
   };
@@ -280,7 +282,7 @@ function renderSites(entries) {
     d.append(sum);
     const fill = () => {
       const body = view === "decoded" ? buildDecoded(site, s, sc) : buildDetail(site, s, sc);
-      body.append(siteActions(site, s));
+      body.append(siteProtect(site, s), siteActions(site, s));
       d.append(body);
     };
     d.addEventListener("toggle", () => {
@@ -331,6 +333,8 @@ function renderBlocked() {
   const head = el("div", "head");
   head.append(el("h2", "", "Blocked trackers"), el("span", "hint", total ? `${total} blocked` : ""));
   box.append(head);
+  if (data.blocked.all) box.append(el("p", "hint", "Block-all is on (Strict level): every known ad, analytics, session-replay and data-broker tracker is blocked, plus any listed here."));
+  if (!total && data.blocked.all) return;
   if (!total) {
     box.append(el("p", "hint", "Nothing blocked yet. Open a website below and press Block next to a company to stop it on every site."));
     return;
@@ -391,7 +395,7 @@ function renderWeekly() {
   stat("Stopped by Reef", `${w.blocked} request${w.blocked === 1 ? "" : "s"}`);
   box.append(grid);
 
-  const h = Report.health(w);
+  const h = Report.health(w, Protect.points(data.protect));
   const health = el("div", "health");
   const msg = h >= 75 ? "Clear water: few trackers reach you." : h >= 45 ? "A bit cloudy: block more trackers to clear it." : "Murky water: many trackers follow you.";
   health.append(el("span", "hint", `Reef health ${h}/100 · ${msg}`));
@@ -1272,6 +1276,13 @@ function toolkitSuggestions() {
   const habits = data.network.habits || [];
   const tool = (id) => Network.TOOLS.find((t) => t.id === id);
 
+  // 0. Reef only watches until a protection level is chosen
+  if (data.protect.level === "off") {
+    out.push({ text: "Reef is only watching. Pick a protection level to start cutting tracking tags off links and clearing tracker cookies.", action: actionButton("Use Balanced", () => changeProtect({ level: "balanced" })) });
+  } else if (!data.protectStats.last && data.protect.autoClean === "off") {
+    out.push({ text: "Tracker cookies from past browsing are still stored on this device. Clear them in one click.", action: actionButton("Go to Clean up", () => $("#tk-clean").scrollIntoView({ behavior: "smooth", block: "start" })) });
+  }
+
   // 1. the companies that watched you most and are not blocked yet
   for (const c of (w.topCompanies || []).filter((c) => !blocked.includes(c.name) && Trackers.domainsFor(c.name).length).slice(0, 3)) {
     out.push({ text: `${c.name} watched you on ${c.sites} site${c.sites === 1 ? "" : "s"} this week, and you do not block it.`, action: blockButton({ company: c.name }) });
@@ -1299,7 +1310,7 @@ function toolkitSuggestions() {
     out.push({ text: "You have not blocked any distracting sites for focus yet. They usually carry a lot of tracking too.", action: el("a", "block-btn", "Add on new tab") });
     out[out.length - 1].action.href = "newtab.html";
   }
-  return out.slice(0, 6);
+  return out.slice(0, 7);
 }
 
 function tkRow(title, detail, right) {
@@ -1313,7 +1324,7 @@ function tkRow(title, detail, right) {
 
 function renderToolkit() {
   const w = Report.weekly(data.days);
-  const parts = Report.healthParts(w);
+  const parts = Report.healthParts(w, Protect.points(data.protect));
   const habits = data.network.habits || [];
   const blockedCount = (data.blocked.companies || []).length + (data.blocked.domains || []).length;
 
@@ -1338,6 +1349,7 @@ function renderToolkit() {
       edit.href = "newtab.html";
       return tkRow("Focus mode", `${(data.blocklist || []).length} distracting site${(data.blocklist || []).length === 1 ? "" : "s"} blocked during sessions`, edit);
     })(),
+    tkRow("Protection level", data.protect.level === "off" ? "Reef only watches" : data.protect.level === "custom" ? "custom mix" : LEVEL_INFO[data.protect.level][1], on(data.protect.level)),
     tkRow("Recording", data.settings.tracking ? "Shadow is watching what sites collect" : "paused", on(data.settings.tracking ? "on" : "paused")),
     tkRow("Private windows", "never recorded, even if allowed", on("always")),
     tkRow("Sensitive sites", "adult, dating, medical and political-party sites are never recorded", on("always")),
@@ -1401,6 +1413,11 @@ function renderToolkit() {
       tkRow("Starting point", "", el("b", "", String(parts.base))),
       tkRow(`${parts.companies} compan${parts.companies === 1 ? "y" : "ies"} watched you this week`, "", pts(`−${parts.exposure} points`, "advertising")),
       tkRow(`You blocked ${parts.sharePct}% of the tracking aimed at you`, "", pts(`+${parts.bonus} points`, "analytics")),
+      ...(parts.protect ? [tkRow("Protections switched on", "", pts(`+${parts.protect} points`, "analytics"))] : []),
+      ...(() => {
+        const raw = parts.base - parts.exposure + parts.bonus + parts.protect;
+        return raw > 100 ? [tkRow("Highest possible", "", pts("capped at 100", "analytics"))] : raw < 10 ? [tkRow("Lowest shown", "", pts("floor of 10", "advertising"))] : [];
+      })(),
       tkRow("Your privacy score", "", el("b", "", `${parts.score} / 100`))
     );
     score.append(sl, el("p", "hint", "To raise it, block the companies that watch you most (see the next steps). Every blocked request counts towards the share."));
@@ -1419,6 +1436,353 @@ function renderToolkit() {
     rec.append(el("p", "net-preview", "Others would see: " + bits.join(" · ") + ". Nothing else."));
   }
   rec.append(actionButton("Sharing settings", () => gotoTab("network")));
+
+  renderProtect();
+  renderClean();
+  renderRights();
+  renderGuided();
+}
+
+// ---------- Protection: what Reef can do for you ----------
+const send = (msg) => chrome.runtime.sendMessage(msg);
+let tuneOpen = false;
+let cleanNote = "";
+
+const LEVEL_INFO = {
+  off: ["Off", "Reef only watches and explains. It changes nothing about your browsing."],
+  relaxed: ["Relaxed", "Cuts tracking tags off links and tells websites not to track you. Nothing should break."],
+  balanced: ["Balanced", "Relaxed, plus it clears tracker cookies once a day."],
+  strict: ["Strict", "Balanced, plus it blocks every known ad and analytics tracker, opens the secure version of sites and clears tracker cookies every hour. A few sites may need pausing."],
+};
+
+async function changeProtect(patch) {
+  await send({ type: "setProtect", patch });
+  await load();
+  render();
+}
+
+const ago = (ts) => {
+  const m = Math.round((Date.now() - ts) / 60000);
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+};
+
+// A list of domains with a remove button and a field to add one
+function domainEditor(title, hint, list, onAdd, onRemove) {
+  const wrap = el("div", "dom-edit");
+  wrap.append(el("b", "", title), el("small", "", hint));
+  const ul = el("ul", "dom-list");
+  for (const d of list) {
+    const li = el("li");
+    const rm = el("button", "block-btn on", "Remove");
+    rm.type = "button";
+    rm.addEventListener("click", () => onRemove(d));
+    li.append(el("span", "grow mono", d), rm);
+    ul.append(li);
+  }
+  wrap.append(ul);
+  const form = el("form", "dom-add");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "example.com";
+  input.setAttribute("aria-label", title);
+  const add = el("button", "block-btn", "Add");
+  add.type = "submit";
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const dom = Reef.normalizeDomain(input.value);
+    if (dom) onAdd(dom);
+  });
+  form.append(input, add);
+  wrap.append(form);
+  return wrap;
+}
+
+function renderProtect() {
+  const box = $("#tk-level");
+  const p = data.protect;
+  box.replaceChildren();
+  const head = el("div", "head");
+  head.append(el("h2", "", "Protection level"), el("span", "hint", "Reef only changes your browsing when you choose a level"));
+  box.append(head);
+
+  const seg = el("div", "level-seg");
+  seg.setAttribute("role", "group");
+  seg.setAttribute("aria-label", "Protection level");
+  for (const name of Protect.LEVELS) {
+    const b = el("button", "", LEVEL_INFO[name][0]);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(p.level === name));
+    b.addEventListener("click", () => changeProtect({ level: name }));
+    seg.append(b);
+  }
+  box.append(seg, el("p", "level-desc", p.level === "custom" ? "Custom: your own mix of the switches below." : LEVEL_INFO[p.level][1]));
+
+  const tune = el("details", "tune");
+  tune.open = tuneOpen;
+  tune.addEventListener("toggle", () => (tuneOpen = tune.open));
+  tune.append(el("summary", "", "Fine-tune"));
+  const body = el("div", "tune-body");
+  body.append(
+    netToggle("Remove tracking tags from links", "Cuts fbclid, gclid, utm_ and similar off an address before the page loads. The page looks the same.", p.stripParams, (v) => changeProtect({ stripParams: v })),
+    netToggle("Tell sites not to track me", "Sends the Global Privacy Control and Do Not Track signals. Sites in many regions must respect them. Not every site does.", p.gpc, (v) => changeProtect({ gpc: v })),
+    netToggle("Block all known ad and analytics trackers", "Everything on Reef's list, not only the companies you picked. Social buttons and embedded videos keep working.", p.blockAll, (v) => changeProtect({ blockAll: v })),
+    netToggle("Open the secure version of sites", "Changes http:// to https://. Local addresses are left alone. A site with no secure version will not load until you pause it.", p.https, (v) => changeProtect({ https: v })),
+    netToggle("Open sensitive sites in a private window", "Health, dating, adult and political-party sites reopen in a private window. Reef must be allowed in private windows.", p.privateSensitive, (v) => changeProtect({ privateSensitive: v }))
+  );
+  const clean = el("label", "tune-select");
+  const sel = document.createElement("select");
+  for (const [v, t] of [["off", "Off"], ["daily", "Once a day"], ["hourly", "Every hour"]]) sel.add(new Option(t, v));
+  sel.value = p.autoClean;
+  sel.addEventListener("change", () => changeProtect({ autoClean: sel.value }));
+  clean.append(el("b", "", "Clear tracker cookies automatically"), sel);
+  body.append(
+    clean,
+    domainEditor("Always open in a private window", "These sites reopen in a private window whenever you visit.", p.privateSites, (d) => send({ type: "privateSite", site: d, on: true }).then(refreshAfter), (d) => send({ type: "privateSite", site: d, on: false }).then(refreshAfter)),
+    domainEditor("Paused sites", "Protection is off on these sites, for when a site misbehaves. Tracking tags, privacy signals, https and blocking all skip them.", p.paused, (d) => send({ type: "pauseSite", site: d, paused: true }).then(refreshAfter), (d) => send({ type: "pauseSite", site: d, paused: false }).then(refreshAfter))
+  );
+  tune.append(body);
+  box.append(tune);
+}
+
+async function refreshAfter() {
+  await load();
+  render();
+}
+
+function renderClean() {
+  const box = $("#tk-clean");
+  const st = data.protectStats;
+  box.replaceChildren(el("h2", "", "Clean up"), el("p", "hint", "Deletes the cookies tracking companies keep about you. Cookies of sites you sign in to (Google, Facebook and similar) and of sites you visit yourself are never touched."));
+  const btn = el("button", "primary", "Clear tracker cookies now");
+  btn.type = "button";
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "Cleaning…";
+    const res = await send({ type: "cleanTrackers" });
+    cleanNote = res && res.ok ? (res.removed ? `Removed ${res.removed} cookie${res.removed === 1 ? "" : "s"} from ${res.domains} tracking domains.` : "Nothing to remove. No tracker cookies were found.") : "Could not clean. Reload Reef on chrome://extensions and try again.";
+    await load();
+    renderToolkit();
+  });
+  box.append(btn);
+  if (cleanNote) box.append(el("p", "net-preview", cleanNote));
+  const ul = el("ul", "clean-list");
+  ul.append(
+    tkRow("Cleared so far", `${st.total || 0} cookie${st.total === 1 ? "" : "s"}`, null),
+    tkRow("Last clean", st.last ? ago(st.last) + (st.lastAuto ? " (automatic)" : "") : "never", null),
+    tkRow("Automatic", data.protect.autoClean === "off" ? "off" : data.protect.autoClean === "daily" ? "once a day" : "every hour", null)
+  );
+  box.append(ul);
+}
+
+// ---------- Ask companies what they know ----------
+const DASHBOARDS = {
+  Google: ["Google ad settings", "https://myadcenter.google.com"],
+  Meta: ["Meta ad preferences", "https://accountscenter.facebook.com/ad_preferences"],
+  Microsoft: ["Microsoft privacy dashboard", "https://account.microsoft.com/privacy"],
+  LinkedIn: ["LinkedIn ad settings", "https://www.linkedin.com/psettings/advertising"],
+  Amazon: ["Amazon ad preferences", "https://www.amazon.com/adprefs"],
+};
+
+function sitesSeenWith(company) {
+  return Object.entries(data.sites)
+    .filter(([, s]) => Object.values(s.trackers || {}).some((t) => t.company === company))
+    .map(([k]) => k)
+    .slice(0, 6);
+}
+
+function rightsLetter(company, law, sites) {
+  const seen = sites.length ? ` Your technology is present on websites I visit, for example ${sites.join(", ")}.` : " Your technology is present on websites I visit.";
+  const id = " If you need an identifier to find my data, such as a cookie ID, tell me how to provide it and I will send it.";
+  if (law === "ccpa") {
+    return `Subject: Request to know, delete and opt out (CCPA/CPRA)
+
+To the privacy team of ${company},
+
+I am a California resident and I am exercising my rights under the California Consumer Privacy Act.
+
+1. Right to know: please tell me which categories and which specific pieces of personal information you have collected about me, where it came from, why you collected it and who you shared or sold it to.
+2. Right to delete: please delete the personal information you hold about me.
+3. Right to opt out: I opt out of the sale and sharing of my personal information, including for cross-context behavioural advertising.
+
+${seen.trim()}${id}
+
+Please confirm receipt and respond within the legal deadline.
+
+Yours sincerely,
+[Your name]
+[Your email address]
+`;
+  }
+  return `Subject: Request for access, objection and erasure (Art. 15, 21 and 17 GDPR)
+
+To the Data Protection Officer of ${company},
+
+I am exercising my rights under the General Data Protection Regulation.
+
+1. Access (Art. 15): please confirm whether you process personal data about me. If you do, send me a copy, and tell me the purposes, the categories of data, the recipients, how long it is kept and where it came from.
+2. Objection (Art. 21): I object to the use of my data for profiling and personalised advertising.
+3. Erasure (Art. 17): please delete all personal data you hold about me.
+
+${seen.trim()}${id}
+
+Please reply within one month, as Article 12 requires.
+
+Yours sincerely,
+[Your name]
+[Your email address]
+`;
+}
+
+function openLetter(company) {
+  const sites = sitesSeenWith(company);
+  const dlg = el("dialog", "share-dialog letter");
+  const sel = document.createElement("select");
+  sel.add(new Option("GDPR (EU and UK)", "gdpr"));
+  sel.add(new Option("CCPA (California)", "ccpa"));
+  const withSites = document.createElement("input");
+  withSites.type = "checkbox";
+  withSites.checked = sites.length > 0;
+  withSites.disabled = !sites.length;
+  const sitesLabel = el("label", "share-sample");
+  sitesLabel.append(withSites, " Mention websites where I met them");
+  const area = document.createElement("textarea");
+  area.rows = 16;
+  area.spellcheck = false;
+  const refresh = () => (area.value = rightsLetter(company, sel.value, withSites.checked ? sites : []));
+  sel.addEventListener("change", refresh);
+  withSites.addEventListener("change", refresh);
+  refresh();
+  const msg = el("p", "hint", "A template, not legal advice. Send it to the privacy contact in the company's privacy policy. Reef sends nothing itself.");
+  const actions = el("div", "share-actions");
+  const copy = el("button", "primary", "Copy letter");
+  const mail = el("button", "", "Open email draft");
+  const close = el("button", "", "Close");
+  for (const b of [copy, mail, close]) b.type = "button";
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(area.value);
+      msg.textContent = "Copied.";
+    } catch {
+      area.select();
+      msg.textContent = "Select the text and copy it with Ctrl or Cmd + C.";
+    }
+  });
+  mail.addEventListener("click", () => {
+    const lines = area.value.split("\n");
+    const subject = lines[0].replace(/^Subject:\s*/, "");
+    chrome.tabs.create({ url: "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(lines.slice(2).join("\n")) });
+  });
+  close.addEventListener("click", () => { dlg.close(); dlg.remove(); });
+  actions.append(copy, mail, close);
+  const dash = DASHBOARDS[company];
+  dlg.append(el("h2", "", `Ask ${company} what it knows`), el("label", "share-sample", "Law: "), sel, sitesLabel, area);
+  if (dash) {
+    const link = el("a", "block-btn", `Also open: ${dash[0]}`);
+    link.href = dash[1];
+    link.target = "_blank";
+    link.rel = "noopener";
+    dlg.append(link);
+  }
+  dlg.append(msg, actions);
+  dlg.addEventListener("close", () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+}
+
+function renderRights() {
+  const box = $("#tk-rights");
+  box.replaceChildren(el("h2", "", "Ask companies what they know"), el("p", "hint", "Companies that watched you most this week. Reef writes a ready-made request for access and deletion. You send it."));
+  const list = (Report.weekly(data.days).topCompanies || []).filter((c) => c.name);
+  if (!list.length) {
+    box.append(el("p", "hint", "Nothing yet. Browse for a few days with recording on."));
+    return;
+  }
+  const ul = el("ul", "clean-list");
+  for (const c of list) ul.append(tkRow(c.name, `watched you on ${c.sites} site${c.sites === 1 ? "" : "s"}`, actionButton("Write request", () => openLetter(c.name))));
+  box.append(ul);
+}
+
+// ---------- Fix it in your browser and accounts ----------
+function renderGuided() {
+  const box = $("#tk-guided");
+  box.replaceChildren(el("h2", "", "Fix it in your browser and accounts"), el("p", "hint", "Reef cannot change these for you. The buttons open the right page."));
+  const items = [
+    ["Block third-party cookies", "Chrome", "chrome://settings/cookies"],
+    ["Always use secure connections", "Chrome", "chrome://settings/security"],
+    ["Turn off ad personalisation", "Chrome", "chrome://settings/adPrivacy"],
+    ["Clear browsing data", "Chrome", "chrome://settings/clearBrowserData"],
+    ["Allow Reef in private windows", "Chrome", "chrome://extensions/?id=" + chrome.runtime.id],
+    ["Google ad settings", "Google", "https://myadcenter.google.com"],
+    ["Auto-delete Google activity", "Google", "https://myactivity.google.com/activitycontrols"],
+    ["Meta ad preferences", "Meta", "https://accountscenter.facebook.com/ad_preferences"],
+    ["Microsoft privacy dashboard", "Microsoft", "https://account.microsoft.com/privacy"],
+    ["Amazon ad preferences", "Amazon", "https://www.amazon.com/adprefs"],
+  ];
+  const ul = el("ul", "clean-list");
+  for (const [title, who, url] of items) ul.append(tkRow(title, who, actionButton("Open", () => chrome.tabs.create({ url }))));
+  box.append(ul, el("p", "hint", "The account pages belong to those companies and may move."));
+}
+
+// ---------- Per-site actions ----------
+function siteProtect(site, s) {
+  const row = el("div", "site-actions site-protect");
+  const note = el("span", "hint");
+  const btn = (text, onClick, cls) => {
+    const b = el("button", cls || "", text);
+    b.type = "button";
+    b.addEventListener("click", onClick);
+    row.append(b);
+    return b;
+  };
+  // 1. block every tracking company seen here
+  const companies = [...new Set(Object.values(s.trackers || {}).filter((t) => t.company && Trackers.TRACKING.has(t.cat) && Trackers.domainsFor(t.company).length).map((t) => t.company))].filter((c) => !isCompanyBlocked(c));
+  if (companies.length) {
+    btn(`Block all ${companies.length} tracker compan${companies.length === 1 ? "y" : "ies"} here`, async () => {
+      await send({ type: "blockMany", companies });
+      await refreshAfter();
+    });
+  }
+  // 2. clean cookies
+  btn("Clear its trackers' cookies", async (e) => {
+    e.target.disabled = true;
+    const res = await send({ type: "cleanTrackers", site });
+    note.textContent = res && res.ok ? (res.removed ? `Removed ${res.removed} tracker cookie${res.removed === 1 ? "" : "s"}.` : "No tracker cookies found.") : "Could not clean.";
+    e.target.disabled = false;
+  });
+  let armed = false;
+  const full = btn("Clear everything it stored", async () => {
+    if (!armed) {
+      armed = true;
+      full.textContent = "Sure? You will be signed out";
+      full.classList.add("danger");
+      setTimeout(() => { armed = false; full.textContent = "Clear everything it stored"; full.classList.remove("danger"); }, 4000);
+      return;
+    }
+    const res = await send({ type: "cleanTrackers", site, firstParty: true });
+    armed = false;
+    full.textContent = "Clear everything it stored";
+    full.classList.remove("danger");
+    note.textContent = res && res.ok ? "Cleared its cookies, saved data and its trackers' cookies." : "Could not clean.";
+  }, "");
+  full.title = "Deletes this site's cookies and saved data on this device, plus its trackers' cookies. You will be signed out of it. Your history stays.";
+  // 3. private window
+  btn("Open in private window", async () => {
+    const res = await send({ type: "openPrivate", url: "https://" + site });
+    note.textContent = res && res.ok ? "Opened." : (res && res.error) || "Could not open.";
+  });
+  const isPrivate = data.protect.privateSites.includes(site);
+  btn(isPrivate ? "Always private: on" : "Always open in private", async () => {
+    await send({ type: "privateSite", site, on: !isPrivate });
+    await refreshAfter();
+  }, isPrivate ? "on" : "");
+  // 4. pause
+  const isPaused = data.protect.paused.includes(site);
+  btn(isPaused ? "Protection paused · resume" : "Pause protection here", async () => {
+    await send({ type: "pauseSite", site, paused: !isPaused });
+    await refreshAfter();
+  }, isPaused ? "on" : "");
+  row.append(note);
+  return row;
 }
 
 // ---------- Controls ----------

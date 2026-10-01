@@ -177,11 +177,25 @@ One page for everything the user does to protect themselves from tracking. The s
 - [ ] **Suggested next steps:** personalised from the data: the top watching companies that are not blocked yet (with a Block button), no blocker or privacy browser ticked, a very distinctive browser, cookie and banner tips, joining a network, and adding focus sites. At most six, and they disappear once done.
 - [ ] **What moves your score:** shows the score as a starting point of 80, minus points for companies met, plus points for the share of tracking blocked, so the numbers add up.
 - [ ] **Your recipe:** the shareable part (what others would see) with a link to the sharing settings on the Network page.
+### F15: Protect, not only describe (V2.5)
+Shadow used to show what is collected. Now each finding comes with something the user can do. Nothing changes in the user's browsing until they choose a level or press a button, and every action can be undone.
+- [ ] **Protection level (Toolkit):** Off, Relaxed, Balanced, Strict, or a custom mix of switches. Relaxed removes tracking tags from links and sends the Global Privacy Control and Do Not Track signals. Balanced adds a daily tracker-cookie clean. Strict adds blocking of every known ad, analytics, session-replay and data-broker tracker (social buttons and embeds stay), opening the secure version of sites, and an hourly clean.
+- [ ] **Link cleaning:** `fbclid`, `gclid`, `utm_*` and similar are removed from addresses before the page loads, via `declarativeNetRequest` redirect rules.
+- [ ] **Secure version of sites:** `http://` opens as `https://`. Local and private-network addresses, single-word hosts and addresses with a port are never upgraded.
+- [ ] **Clean up:** one button deletes cookies of known and chosen tracking domains. Sites the user signs in to (Google, Facebook and similar) and sites the user visits are never touched. Optional automatic cleaning once a day or every hour, with a catch-up at browser start. Shows total cleared and last clean.
+- [ ] **Per website:** "Block all tracker companies here", "Clear its trackers' cookies", "Clear everything it stored" (asks twice because it signs the user out), "Open in private window", "Always open in private", and "Pause protection here / resume".
+- [ ] **Private windows:** listed sites, and optionally sensitive sites, reopen in a private window. If private windows are not allowed for Reef, the tab stays as it is and the user is told how to allow it.
+- [ ] **Paused sites:** protection (blocking, link cleaning, privacy signals, https) skips these, for when a site misbehaves.
+- [ ] **Ask companies what they know:** for the companies that watched the user most, a ready-made access, objection and erasure request (GDPR, or CCPA) that can be copied or opened as an email draft, with the user's own sites optionally mentioned. Nothing is sent by Reef.
+- [ ] **Fix it in your browser and accounts:** buttons that open the relevant Chrome settings and account ad-settings pages.
+- [ ] **Reef reward:** switched-on protections add up to 8 points to the privacy score (and so to the water clarity of the reef). The score breakdown shows them, and shows when the score is capped at 100.
+- [ ] **Policy:** the new `cookies` and `browsingData` permissions and the stored settings are listed in the privacy policy before release.
+
 ## 3. Technical notes (for the build)
 
 - Manifest V3, plain HTML/CSS/JS, no build step.
 - Shadow: `webRequest` (observe only) for requests, `Set-Cookie` headers and request bodies; a MAIN-world content script (`page-hooks.js`) wraps fingerprinting-related browser APIs; an isolated content script (`page-bridge.js`) forwards the results and the page title to the service worker. Tracker list in `trackers.js`, categories in `categories.js`, inference in `twin.js`, UI in `insights.html/js/css`.
-- Blocking via `declarativeNetRequest` dynamic rules (redirect to `blocked.html`), added on session start and removed on session end/give-up.
+- Blocking via `declarativeNetRequest` dynamic rules (redirect to `blocked.html`), added on session start and removed on session end/give-up. Rule ids: focus mode below 10000, tracker blocking 10000 to 19999, protections (`protect.js`: link cleaning, privacy headers, https upgrade) from 20000. Each part rewrites only its own range.
 - Storage: `chrome.storage.local` (blocklist, active session `{startTime, endTime}`, history).
 - Session end handled by `chrome.alarms` in the background service worker.
 - Gmail detection: content script on `mail.google.com` that watches for the Send action / "Message sent" confirmation and messages the background worker (`chrome.runtime.sendMessage`). Detection depends on Gmail's page structure and may need updating if Gmail changes.

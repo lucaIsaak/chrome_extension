@@ -62,7 +62,8 @@ const Report = (() => {
 
   // 0..100. Fewer companies watching you and more tracking blocked means a healthier reef.
   // healthParts shows how the score is made up, health is just the number.
-  function healthParts(w) {
+  // extra = bonus points from protections the user switched on (see protect.js)
+  function healthParts(w, extra = 0) {
     if (!w || !w.hasData) return { hasData: false, score: 60 }; // neutral until there is something to judge
     const exposure = Math.min(70, w.companies * 1.4);
     const share = w.blocked / Math.max(1, w.blocked + w.trackReq);
@@ -74,10 +75,11 @@ const Report = (() => {
       exposure: Math.round(exposure),
       sharePct: Math.round(share * 100),
       bonus: Math.round(bonus),
-      score: Math.max(10, Math.min(100, Math.round(BASE - exposure + bonus))),
+      protect: Math.round(extra),
+      score: Math.max(10, Math.min(100, Math.round(BASE - exposure + bonus + extra))),
     };
   }
-  const health = (w) => healthParts(w).score;
+  const health = (w, extra) => healthParts(w, extra).score;
 
   return { weekly, health, healthParts, dayKey };
 })();

@@ -17,6 +17,7 @@ const Shadow = (() => {
   const PRIVATE = "(private)"; // marker for tabs in private windows, which are never recorded
   const model = { sites: {}, signals: newSignals(), days: {}, settings: { tracking: false }, blocked: { companies: [], domains: [] } }; // off until the user agrees on the welcome page
   let blockedSet = new Set(); // every domain the user chose to block
+  let protectPts = 0; // score bonus from switched-on protections
   let lastHealth = null;
   let tabSites = {}; // tabId -> registrable domain of the page in that tab
   const stats = { started: Date.now(), requests: 0, pages: 0, errors: 0, lastError: null, lastPage: null, lastSite: null, lastAudience: null };
@@ -67,7 +68,7 @@ const Shadow = (() => {
   }
 
   const loaded = Promise.all([
-    chrome.storage.local.get(["sites", "signals", "settings", "signalDays", "blockedTrackers"]),
+    chrome.storage.local.get(["sites", "signals", "settings", "signalDays", "blockedTrackers", "protect"]),
     chrome.storage.session.get("tabSites").catch(() => ({})),
   ]).then(([local, session]) => {
     if (local.sites) model.sites = local.sites;
@@ -81,6 +82,7 @@ const Shadow = (() => {
     }
     if (local.blockedTrackers) model.blocked = local.blockedTrackers;
     blockedSet = new Set(Trackers.blockDomains(model.blocked));
+    protectPts = Protect.points(Protect.normalize(local.protect));
     tabSites = (session && session.tabSites) || {};
   });
 
@@ -91,7 +93,7 @@ const Shadow = (() => {
   function flush() {
     saveTimer = null;
     const out = { sites: model.sites, signals: model.signals, signalDays: model.days };
-    const health = Report.health(Report.weekly(model.days));
+    const health = Report.health(Report.weekly(model.days), protectPts);
     if (health !== lastHealth) {
       lastHealth = health;
       out.reefHealth = health; // small key the new tab can read cheaply
@@ -107,6 +109,10 @@ const Shadow = (() => {
       const before = model.settings.retentionDays;
       model.settings = { tracking: false, ...changes.settings.newValue };
       if (model.settings.retentionDays !== before) prune();
+    }
+    if (changes.protect) {
+      protectPts = Protect.points(Protect.normalize(changes.protect.newValue));
+      scheduleSave();
     }
     if (changes.blockedTrackers) {
       model.blocked = changes.blockedTrackers.newValue || { companies: [], domains: [] };
