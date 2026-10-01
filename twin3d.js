@@ -8,6 +8,13 @@ const CORAL = 0xff7a6b;
 const GOLD = 0xffc46b;
 const NAVY = 0x040b1d;
 
+// Colour sets for the three Shadow themes
+const THEMES = {
+  glass: { bg: 0x040b1d, colA: 0x1f6bff, colB: 0x80f2e6, ring: AQUA, ring2: 0x3d8bff, stars: 0xcfeaff, glow: 0x4696ff, radar: false },
+  hud: { bg: 0x03091a, colA: 0x2f6bff, colB: 0x7fe0d4, ring: AQUA, ring2: CORAL, stars: 0xcfeaff, glow: 0x2f6bff, radar: false },
+  terminal: { bg: 0x040d12, colA: 0x0e6b5a, colB: 0x7fffd0, ring: 0x7fffd0, ring2: 0x1f9d7a, stars: 0x7fe0d4, glow: 0x1fbf9a, radar: true },
+};
+
 const OUTFIT = { sporty: 0x4fd1c5, streetwear: 0xff7a6b, outdoor: 0x5aa469, smart: 0x1b2b3a, luxury: 0xc9a24b, casual: 0x8fb8cc };
 
 export function createTwinStage(container) {
@@ -54,13 +61,18 @@ export function createTwinStage(container) {
   scene.add(stars);
 
   // ----- horizon glow -----
-  const glowTex = radialTexture("rgba(70,150,255,0.65)", "rgba(70,150,255,0)");
+  const glowTex = radialTexture("rgba(255,255,255,0.32)", "rgba(255,255,255,0)");
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(120, 36), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
   glow.position.set(0, 4, -42);
   scene.add(glow);
 
   // ----- grid floor (lines + glowing dots, with a pulse that travels outward) -----
-  const uniforms = { uTime: { value: 0 }, uPR: { value: renderer.getPixelRatio() } };
+  const uniforms = {
+    uTime: { value: 0 },
+    uPR: { value: renderer.getPixelRatio() },
+    uColA: { value: new THREE.Color(THEMES.glass.colA) },
+    uColB: { value: new THREE.Color(THEMES.glass.colB) },
+  };
   const SP = 1.5; // grid spacing
   const N = 30; // lines each side of the centre
   const linePos = [];
@@ -85,9 +97,9 @@ export function createTwinStage(container) {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       vertexShader: `uniform float uTime; varying float vA; ${waveGLSL}
-        void main(){ float d = length(position.xz); float fade = 1.0 - smoothstep(8.0, 46.0, d);
-          vA = fade * (0.28 + wave(d) * 0.9); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(mix(vec3(0.12, 0.42, 1.0), vec3(0.5, 0.95, 0.9), clamp(vA, 0.0, 1.0)), vA); }`,
+        void main(){ float d = length(position.xz); float fade = 1.0 - smoothstep(5.0, 34.0, d);
+          vA = fade * (0.14 + wave(d) * 0.5); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform vec3 uColA; uniform vec3 uColB; varying float vA; void main(){ gl_FragColor = vec4(mix(uColA, uColB, clamp(vA, 0.0, 1.0)), vA); }`,
     })
   );
   scene.add(grid);
@@ -103,21 +115,21 @@ export function createTwinStage(container) {
       blending: THREE.AdditiveBlending,
       vertexShader: `uniform float uTime; uniform float uPR; varying float vA; ${waveGLSL}
         void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); float d = length(position.xz);
-          float w = wave(d); float fade = 1.0 - smoothstep(8.0, 46.0, d);
-          vA = fade * (0.55 + w); gl_PointSize = (3.2 + w * 7.0) * uPR * (260.0 / max(1.0, -mv.z)); gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `varying float vA; void main(){ float r = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.05, r) * vA;
-          gl_FragColor = vec4(mix(vec3(0.2, 0.55, 1.0), vec3(0.6, 1.0, 0.95), clamp(vA - 0.5, 0.0, 1.0)), a); }`,
+          float w = wave(d); float fade = 1.0 - smoothstep(5.0, 34.0, d);
+          vA = fade * (0.3 + w * 0.6); gl_PointSize = min((2.4 + w * 4.0) * uPR * (200.0 / max(1.0, -mv.z)), 11.0 * uPR); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform vec3 uColA; uniform vec3 uColB; varying float vA; void main(){ float r = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.05, r) * vA;
+          gl_FragColor = vec4(mix(uColA, uColB, clamp(vA - 0.5, 0.0, 1.0)), a); }`,
     })
   );
   scene.add(dots);
 
   // platform under the figure
-  const padTex = radialTexture("rgba(127,224,212,0.55)", "rgba(127,224,212,0)");
+  const padTex = radialTexture("rgba(255,255,255,0.28)", "rgba(255,255,255,0)");
   const pad = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ map: padTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
   pad.rotation.x = -Math.PI / 2;
   pad.position.y = 0.02;
   scene.add(pad);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.62, 64), new THREE.MeshBasicMaterial({ color: AQUA, transparent: true, opacity: 0.8, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.62, 64), new THREE.MeshBasicMaterial({ color: AQUA, transparent: true, opacity: 0.5, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.03;
   scene.add(ring);
@@ -125,6 +137,32 @@ export function createTwinStage(container) {
   ring2.rotation.x = -Math.PI / 2;
   ring2.position.y = 0.03;
   scene.add(ring2);
+
+  // radar sweep on the floor (terminal theme only)
+  const radar = new THREE.Mesh(
+    new THREE.CircleGeometry(9, 48, 0, 0.8),
+    new THREE.MeshBasicMaterial({ color: AQUA, transparent: true, opacity: 0.16, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  radar.rotation.x = -Math.PI / 2;
+  radar.position.y = 0.04;
+  radar.visible = false;
+  scene.add(radar);
+
+  function setTheme(name) {
+    const th = THEMES[name] || THEMES.glass;
+    renderer.setClearColor(th.bg, 1);
+    scene.fog.color.setHex(th.bg);
+    uniforms.uColA.value.setHex(th.colA);
+    uniforms.uColB.value.setHex(th.colB);
+    ring.material.color.setHex(th.ring);
+    ring2.material.color.setHex(th.ring2);
+    stars.material.color.setHex(th.stars);
+    glow.material.color.setHex(th.glow);
+    pad.material.color.setHex(th.ring);
+    radar.material.color.setHex(th.colB);
+    radar.visible = th.radar;
+  }
+  setTheme("glass");
 
   // ----- the twin (rotates with the user's input) -----
   const spin = new THREE.Group(); // receives drag/scroll rotation
@@ -265,6 +303,7 @@ export function createTwinStage(container) {
     stars.rotation.y = t * 0.004;
     ring.scale.setScalar(1 + Math.sin(t * 1.5) * 0.03);
     ring2.rotation.z = t * 0.2;
+    if (radar.visible) radar.rotation.z = -t * 1.1;
     if (model && model.userData.spinner) model.userData.spinner.rotation.z = t * 0.6;
     for (const o of orbiters) {
       const a = o.angle + t * 0.35;
@@ -283,7 +322,7 @@ export function createTwinStage(container) {
     renderer.domElement.remove();
   }
 
-  return { setTwin, dispose };
+  return { setTwin, setTheme, dispose };
 }
 
 // ===== model builders =====
@@ -319,12 +358,12 @@ function textTexture(text, { font, color, glow, w = 512, h = 512 }) {
 
 // A "?" faked as thick glowing layers, so it reads as solid when rotated
 function buildQuestionMark(group) {
-  const tex = textTexture("?", { font: "bold 430px Georgia, serif", color: "#9ff3ea", glow: "#3d8bff" });
+  const tex = textTexture("?", { font: "bold 430px Georgia, serif", color: "#7fd8ff", glow: "#3d8bff" });
   const layers = 11;
   for (let i = 0; i < layers; i++) {
     const z = (i / (layers - 1) - 0.5) * 0.42;
     const edge = Math.abs(i / (layers - 1) - 0.5) * 2; // 1 at the faces, 0 in the middle
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.16 + edge * 0.5, fog: false });
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.05 + edge * 0.2, fog: false });
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), mat);
     plane.position.z = z;
     plane.position.y = 1.35;
@@ -333,7 +372,7 @@ function buildQuestionMark(group) {
   // orbiting rings around the "?"
   const spinner = new THREE.Group();
   spinner.position.y = 1.35;
-  for (const [r, tilt, col] of [[1.9, 1.15, AQUA], [2.25, 0.5, 0x3d8bff]]) {
+  for (const [r, tilt, col] of [[1.5, 1.15, AQUA], [1.8, 0.5, 0x3d8bff]]) {
     const torus = new THREE.Mesh(new THREE.TorusGeometry(r, 0.012, 8, 96), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
     torus.rotation.x = tilt;
     spinner.add(torus);

@@ -1,6 +1,10 @@
 const $ = (sel) => document.querySelector(sel);
 
 let data = { sites: {}, signals: null, settings: { tracking: true } };
+const THEMES = ["glass", "hud", "terminal"];
+let theme = "glass";
+let view = "decoded"; // "raw" or "decoded" (plain-words explanations)
+const openSites = new Set();
 let confirmingClear = false;
 let renderTimer = null;
 
@@ -31,8 +35,18 @@ const el = (tag, cls, text) => {
 };
 
 async function load() {
-  const stored = await chrome.storage.local.get(["sites", "signals", "settings"]);
+  const stored = await chrome.storage.local.get(["sites", "signals", "settings", "shadowTheme", "footprintView"]);
+  applyTheme(stored.shadowTheme);
+  view = stored.footprintView === "raw" ? "raw" : "decoded";
   data = { sites: stored.sites || {}, signals: stored.signals || null, settings: { tracking: true, ...(stored.settings || {}) } };
+}
+
+// ---------- Theme ----------
+function applyTheme(name) {
+  theme = THEMES.includes(name) ? name : "glass";
+  document.body.dataset.theme = theme;
+  for (const b of document.querySelectorAll(".themes button")) b.setAttribute("aria-pressed", String(b.dataset.theme === theme));
+  if (stage) stage.setTheme(theme);
 }
 
 // ---------- Scoring ----------
@@ -64,8 +78,8 @@ function scoreSite(site) {
   if (ids) reasons.push(`${ids} identifier${ids === 1 ? "" : "s"} sent out`);
 
   score = Math.min(100, score);
-  const level = score < 20 ? ["Low", "low"] : score < 45 ? ["Medium", "medium"] : score < 70 ? ["High", "high"] : ["Very high", "vhigh"];
-  return { score, label: level[0], cls: level[1], reasons, trackers: trackers.length };
+  const level = score < 20 ? ["Low", "low", "Barely tracked"] : score < 45 ? ["Medium", "medium", "Somewhat tracked"] : score < 70 ? ["High", "high", "Heavily tracked"] : ["Very high", "vhigh", "Extremely tracked"];
+  return { score, label: level[0], cls: level[1], plain: level[2], reasons, trackers: trackers.length };
 }
 
 // ---------- Footprint ----------
@@ -116,11 +130,12 @@ function renderSummary(entries) {
     }
     for (const [key, n] of Object.entries(s.fp || {})) if (!key.endsWith("|(site itself)")) fpEvents += n;
   }
+  const plain = view === "decoded";
   const tiles = [
-    [entries.length, "websites recorded"],
-    [trackerDomains.size, "tracking domains"],
-    [Object.keys(companies).length, "companies following you"],
-    [fpEvents, "device-reading calls by third parties"],
+    [entries.length, plain ? "websites you visited" : "websites recorded"],
+    [trackerDomains.size, plain ? "tracking services found" : "tracking domains"],
+    [Object.keys(companies).length, plain ? "companies watching you" : "companies following you"],
+    [fpEvents, plain ? "times your device was inspected" : "device-reading calls by third parties"],
   ];
   const wrap = $("#summary");
   wrap.replaceChildren();
@@ -229,13 +244,193 @@ function renderSites(entries) {
   for (const { site, s, sc } of scored) {
     const d = el("details", "site");
     const sum = el("summary");
-    sum.append(el("span", "domain", site), el("span", "meta", `${sc.trackers} tracker${sc.trackers === 1 ? "" : "s"} · ${s.visits} visit${s.visits === 1 ? "" : "s"}`), el("span", "pill " + sc.cls, sc.label));
+    const plain = view === "decoded";
+    const toggle = el("span", "view-toggle");
+    for (const [key, label] of [["raw", "Raw data"], ["decoded", "Decoded"]]) {
+      const b = el("button", "", label);
+      b.type = "button";
+      b.title = key === "raw" ? "Technical details" : "Explained in plain words";
+      b.setAttribute("aria-pressed", String(view === key));
+      b.addEventListener("click", (e) => {
+        e.preventDefault(); // do not open or close the row
+        e.stopPropagation();
+        setView(key);
+      });
+      toggle.append(b);
+    }
+    const meta = plain
+      ? `${countWatchers(s)} compan${countWatchers(s) === 1 ? "y" : "ies"} watching · visited ${s.visits}×`
+      : `${sc.trackers} tracker${sc.trackers === 1 ? "" : "s"} · ${s.visits} visit${s.visits === 1 ? "" : "s"}`;
+    sum.append(el("span", "domain", site), toggle, el("span", "meta", meta), el("span", "pill " + sc.cls, plain ? sc.plain : sc.label));
     d.append(sum);
+    const fill = () => d.append(view === "decoded" ? buildDecoded(site, s, sc) : buildDetail(site, s, sc));
     d.addEventListener("toggle", () => {
-      if (d.open && d.children.length === 1) d.append(buildDetail(site, s, sc));
+      if (d.open) {
+        openSites.add(site);
+        if (d.children.length === 1) fill();
+      } else {
+        openSites.delete(site);
+      }
     });
+    if (openSites.has(site)) {
+      fill();
+      d.open = true;
+    }
     wrap.append(d);
   }
+}
+
+// ---------- Decoded view (plain words) ----------
+const ROLE = {
+  "data-broker": ["data broker", "Matches your browsing to profiles that data companies trade with each other."],
+  advertising: ["advertising", "Builds a profile of your interests so you can be shown targeted ads, here and on other sites."],
+  "session-replay": ["screen recorder", "Records your mouse movements, scrolling and clicks, like a screen recording of your visit."],
+  analytics: ["analytics", "Studies how you use the site: which pages you open, for how long, and what you click."],
+  social: ["social network", "Learns that you visited, and can link it to your account if you are logged in there."],
+};
+const ROLE_ORDER = ["data-broker", "advertising", "session-replay", "analytics", "social"];
+const STRONG_FP = ["canvas", "webgl", "audio", "fonts"];
+const plural = (n, one, many) => (n === 1 ? one : many);
+
+function lifetime(days) {
+  if (days >= 365) return "over a year";
+  if (days >= 60) return "about " + Math.round(days / 30) + " months";
+  return days + " day" + (days === 1 ? "" : "s");
+}
+
+// Number of distinct companies behind the tracking domains of a site
+function countWatchers(s) {
+  const names = new Set();
+  for (const t of Object.values(s.trackers || {})) if (t.company && Trackers.TRACKING.has(t.cat)) names.add(t.company);
+  return names.size;
+}
+
+function setView(next) {
+  view = next;
+  chrome.storage.local.set({ footprintView: next });
+  const entries = Object.entries(data.sites);
+  renderSummary(entries);
+  renderSites(entries);
+}
+
+function buildDecoded(site, s, sc) {
+  const box = el("div", "detail decoded");
+
+  // who is watching: group domains by company
+  const companies = {};
+  const unknown = [];
+  for (const [dom, t] of Object.entries(s.trackers || {})) {
+    if (t.company) {
+      const c = (companies[t.company] = companies[t.company] || { cats: new Set(), n: 0 });
+      c.cats.add(t.cat);
+      c.n += t.n;
+    } else if (t.cat === "other") {
+      unknown.push(dom);
+    }
+  }
+  const watchers = Object.entries(companies)
+    .filter(([, c]) => ROLE_ORDER.some((r) => c.cats.has(r)))
+    .map(([name, c]) => ({ name, n: c.n, role: ROLE_ORDER.find((r) => c.cats.has(r)) }))
+    .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || b.n - a.n);
+
+  // verdict
+  const verdict = el("div", "verdict " + sc.cls);
+  const count = watchers.length;
+  verdict.append(
+    el("b", "", count ? `${count} ${plural(count, "company", "companies")} watched you on ${site}` : `No well-known trackers were seen on ${site}`),
+    el("p", "reason", { low: "Not much tracking here.", medium: "A normal amount of tracking for today's web.", high: "This site lets many outsiders follow what you do.", vhigh: "This site is full of outside trackers. Almost all of it is invisible to you." }[sc.cls])
+  );
+  box.append(verdict);
+
+  // who
+  if (watchers.length) {
+    const ul = el("ul", "plain-list");
+    for (const w of watchers) {
+      const li = el("li");
+      li.append(el("b", "", w.name), el("span", "chip " + w.role, ROLE[w.role][0]), el("span", "reason", ROLE[w.role][1]));
+      ul.append(li);
+    }
+    const wrap = el("div");
+    wrap.append(el("h3", "", "Who was watching"), ul);
+    if (unknown.length) wrap.append(el("p", "reason", `Also contacted, but not on our list of known trackers: ${unknown.slice(0, 8).join(", ")}${unknown.length > 8 ? " and " + (unknown.length - 8) + " more" : ""}.`));
+    box.append(wrap);
+  }
+
+  // what they could learn
+  const learn = [];
+  const params = Object.values(s.params || {});
+  const ids = params.filter((p) => p.kind === "identifier");
+  if (ids.length) learn.push(["A name tag for your browser", `${ids.length} identifier${ids.length === 1 ? " was" : "s were"} sent to ${new Set(ids.map((p) => p.d)).size} ${plural(new Set(ids.map((p) => p.d)).size, "company", "companies")}. Think of it as a code only they can read, which lets them recognise you again.`]);
+  const thirdCookies = Object.values(s.cookies || {}).filter((c) => c.third);
+  if (thirdCookies.length) {
+    const longest = Math.max(...thirdCookies.map((c) => c.days));
+    learn.push(["Tracking cookies from outsiders", `${thirdCookies.length} small ${plural(thirdCookies.length, "file was", "files were")} stored in your browser by other companies${longest ? ", the longest stays " + lifetime(longest) : ""}. They recognise you when you come back.`]);
+  }
+  const pageParams = params.filter((p) => p.kind === "page");
+  if (pageParams.length) learn.push(["Which page you were reading", `The title or address of the page was passed to ${new Set(pageParams.map((p) => p.d)).size} ${plural(new Set(pageParams.map((p) => p.d)).size, "company", "companies")}.`]);
+  const locParams = params.filter((p) => p.kind === "location");
+  if (locParams.length) learn.push(["Your location", "Location details such as a city or coordinates were sent to outside companies."]);
+  const deviceParams = params.filter((p) => p.kind === "device");
+  const fp = Object.entries(s.fp || {}).filter(([k]) => !k.endsWith("|(site itself)"));
+  const readTypes = new Set(fp.map(([k]) => k.split("|")[0]));
+  if (deviceParams.length || ["hardware", "screen", "language", "timezone", "plugins"].some((t) => readTypes.has(t))) {
+    learn.push(["Details about your computer", "Your screen size, language, time zone and hardware were read or sent out. Small details, but together they make your setup easy to recognise."]);
+  }
+  const strong = fp.filter(([k]) => STRONG_FP.includes(k.split("|")[0]));
+  if (strong.length) {
+    const hosts = [...new Set(strong.map(([k]) => k.split("|")[1]))];
+    learn.push(["Your browser's fingerprint", `Scripts from ${hosts.slice(0, 3).join(", ")}${hosts.length > 3 ? " and others" : ""} drew hidden images or asked about your graphics card. This tells your computer apart from millions of others, even if you delete your cookies.`]);
+  }
+  if (readTypes.has("geolocation")) learn.push(["A request for your precise location", "A script asked your browser for your exact position."]);
+  if (readTypes.has("beacon")) learn.push(["Data sent as you left", "Some information was sent in the background so it survives closing the page."]);
+  if (params.some((p) => p.kind === "campaign")) learn.push(["Which ad or link brought you here", "Marketing codes in the address tell advertisers where you came from."]);
+  learn.push(["Roughly where you are", "Every company contacted automatically sees your IP address, which reveals your approximate city."]);
+  const learnWrap = el("div");
+  learnWrap.append(el("h3", "", "What they could learn about you"));
+  const learnList = el("ul", "plain-list");
+  for (const [title, text] of learn) {
+    const li = el("li");
+    li.append(el("b", "", title), el("span", "reason", text));
+    learnList.append(li);
+  }
+  learnWrap.append(learnList);
+  box.append(learnWrap);
+
+  // can they follow you?
+  const names = new Set(watchers.map((w) => w.name));
+  const elsewhere = {};
+  for (const [other, o] of Object.entries(data.sites)) {
+    if (other === site) continue;
+    for (const t of Object.values(o.trackers || {})) if (t.company && names.has(t.company)) (elsewhere[t.company] = elsewhere[t.company] || new Set()).add(other);
+  }
+  const follow = Object.entries(elsewhere).sort((a, b) => b[1].size - a[1].size).slice(0, 4);
+  const followWrap = el("div");
+  followWrap.append(el("h3", "", "Could they follow you to other sites?"));
+  if (follow.length) {
+    const ul = el("ul", "plain-list");
+    for (const [name, sites] of follow) {
+      const li = el("li");
+      li.append(el("b", "", name), el("span", "reason", `also watched you on ${sites.size} other site${sites.size === 1 ? "" : "s"} you visited: ${[...sites].slice(0, 3).join(", ")}${sites.size > 3 ? "…" : ""}`));
+      ul.append(li);
+    }
+    followWrap.append(ul);
+  } else {
+    followWrap.append(el("p", "reason", watchers.length ? "None of these companies showed up on your other recorded sites yet. Browse more and this fills in." : "Nothing to follow here."));
+  }
+  box.append(followWrap);
+
+  // what to do
+  const tips = ["Install a tracker blocker such as uBlock Origin or Privacy Badger. It stops most of the companies above from loading at all."];
+  if (thirdCookies.length) tips.push("In Chrome, open Settings, then Privacy and security, then Third-party cookies, and choose to block them.");
+  if (strong.length) tips.push("Fingerprinting works without cookies. Browsers such as Firefox or Brave offer protection against it.");
+  tips.push('On cookie banners, choose "Reject all" or the most limited option.');
+  const tipsWrap = el("div");
+  tipsWrap.append(el("h3", "", "What you can do"));
+  const tipList = el("ul", "plain-list tips");
+  for (const t of tips) tipList.append(el("li", "", t));
+  tipsWrap.append(tipList);
+  box.append(tipsWrap);
+  return box;
 }
 
 // ---------- Digital twin ----------
@@ -326,6 +521,7 @@ function ensureStage() {
   stageLoading = import("./twin3d.js")
     .then((mod) => {
       stage = mod.createTwinStage($("#stage3d"));
+      stage.setTheme(theme);
       $("#avatar").hidden = true;
     })
     .catch(() => {
@@ -361,6 +557,14 @@ function renderControls() {
   btn.classList.toggle("danger", confirmingClear);
 }
 
+document.querySelector(".themes").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-theme]");
+  if (!btn) return;
+  const name = btn.dataset.theme;
+  applyTheme(name);
+  chrome.storage.local.set({ shadowTheme: name });
+});
+
 $("#tracking").addEventListener("change", (e) => chrome.storage.local.set({ settings: { ...data.settings, tracking: e.target.checked } }));
 $("#clear").addEventListener("click", async () => {
   if (!confirmingClear) {
@@ -374,12 +578,38 @@ $("#clear").addEventListener("click", async () => {
 });
 
 $("#tabs").addEventListener("click", (e) => {
-  const tab = e.target.dataset && e.target.dataset.tab;
-  if (!tab) return;
+  const btn = e.target.closest("button[data-tab]");
+  if (!btn) return;
+  const tab = btn.dataset.tab;
   for (const b of document.querySelectorAll("#tabs button")) b.classList.toggle("active", b.dataset.tab === tab);
   for (const name of ["footprint", "twin"]) $("#tab-" + name).hidden = name !== tab;
   history.replaceState(null, "", "#" + tab);
 });
+
+// Ask the background recorder whether it is alive, and say so
+async function checkStatus() {
+  const el = $("#status");
+  let s = null;
+  try {
+    s = await Promise.race([chrome.runtime.sendMessage({ type: "shadowStatus" }), new Promise((r) => setTimeout(() => r(null), 3000))]);
+  } catch {}
+  if (!s) {
+    el.className = "status bad";
+    el.textContent = "The recorder is not answering, so nothing is being recorded. Open chrome://extensions, click the reload icon on Reef, then reload the pages you want to track.";
+  } else if (s.requests === undefined) {
+    el.className = "status bad";
+    el.textContent = "Chrome is still running an old version of Reef in the background. Open chrome://extensions, click the reload icon on Reef, then reload the pages you want to track.";
+  } else if (!s.tracking) {
+    el.className = "status";
+    el.textContent = "Recording is paused.";
+  } else if (s.errors) {
+    el.className = "status bad";
+    el.textContent = `Recorder problem (${s.errors} error${s.errors === 1 ? "" : "s"}): ${s.lastError}`;
+  } else {
+    el.className = "status ok";
+    el.textContent = `Recording is active · ${s.pages} page${s.pages === 1 ? "" : "s"} seen since the recorder last started · ${s.sites} saved`;
+  }
+}
 
 function render() {
   const entries = Object.entries(data.sites);
@@ -406,6 +636,8 @@ chrome.storage.onChanged.addListener(() => {
 });
 
 (async () => {
+  checkStatus();
+  setInterval(checkStatus, 5000);
   await load();
   render();
   if (location.hash === "#footprint") document.querySelector('#tabs button[data-tab="footprint"]').click();

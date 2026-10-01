@@ -110,14 +110,23 @@ Reef also shows **what websites collect about you** and what they could **infer*
 - [ ] Each website gets an exposure score (Low / Medium / High / Very high) with a short reason.
 - [ ] A "Shadow" page lists all websites sorted by exposure. Opening a website shows the details above.
 - [ ] A summary shows how many websites, trackers and companies were found, and which companies follow the user across the most websites.
+- [ ] Every website row has a "Raw data | Decoded" switch to the left of the tracker count. Raw data shows the technical details. Decoded explains the same data in plain words: who was watching and what each company does, what they could learn, whether they can follow the user to other sites, and what the user can do. Decoded is the default and the choice is remembered. The summary tiles and exposure labels also switch to plain wording.
 - [ ] A panel shows what the browser exposes to every website without asking (system, language, time zone, screen, CPU cores, and that the IP address reveals an approximate location).
 - [ ] The user can pause tracking and delete all collected data at any time.
 
 ### F10: Digital twin (what could be inferred about you)
-- [ ] The twin page starts as a grey silhouette with a question mark and a "0% complete" status.
+- [ ] The Shadow page has a left sidebar that works as the main navigation: an "Explore" list (Digital twin, Footprint) and a "Style" list. The current entry is highlighted.
+- [ ] Clicking "your shadow" opens the Digital twin view first.
+- [ ] The twin is shown as a 3D scene: a glowing grid floor under a starry sky, with the avatar (or the question mark) floating above it.
+- [ ] The user can rotate the scene by dragging with the mouse or two-finger scrolling on the trackpad. Pinch zooms, double-click resets, arrow keys also rotate.
+- [ ] If WebGL is not available, a flat 2D avatar is shown instead.
+- [ ] A "Style" list in the left sidebar of the Shadow page (each entry with a small preview) lets the user choose between three themes: Glass (default), HUD (neon outlines, corner brackets, mono labels) and Terminal (monospace log lines, scanlines, radar sweep). The 3D scene changes colours with the theme.
+- [ ] The chosen theme is remembered after closing the browser.
+- [ ] The twin starts as a floating question mark and a "0% complete" status.
 - [ ] As more pages are visited, attributes appear, each with a value, a confidence bar and the evidence ("Because you visited ...").
 - [ ] Attributes: location (time zone / language), languages, device, daily rhythm, interests, work or life stage, spending behaviour, clothing style, age range (guess), gender lean (guess).
 - [ ] Hair colour always stays "?" with the explanation that nothing in the data reveals it.
+- [ ] The gender guess also reads shop sections in the page address and title in several languages (for example /men/, /homem/, Damenmode). Only counts are stored, never the address. Browsing a men's or women's section is enough to produce a low-confidence guess, with the pages as evidence.
 - [ ] Age and gender guesses are capped at low confidence and labelled as unreliable ad-tech style guesses.
 - [ ] The avatar visibly fills in as confidence grows (outfit style, props that match interests) and shows a completeness percentage.
 - [ ] Only counters are stored (categories, hours, domain counts). Page titles and text are classified locally and then discarded.

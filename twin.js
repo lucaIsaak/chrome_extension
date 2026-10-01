@@ -17,7 +17,7 @@ const Twin = (() => {
     outdoor: { label: "Outdoor", domains: ["patagonia.com", "thenorthface.com", "columbia.com", "jack-wolfskin.com", "bergfreunde.de", "rei.com"] },
     smart: { label: "Smart / formal", domains: ["suitsupply.com", "hugoboss.com", "mrporter.com"] },
     luxury: { label: "Luxury", domains: ["farfetch.com", "net-a-porter.com", "mytheresa.com", "ssense.com"] },
-    casual: { label: "Casual / fast fashion", domains: ["zara.com", "hm.com", "uniqlo.com", "primark.com", "shein.com", "asos.com", "zalando.de", "zalando.com", "vinted.de", "vinted.com"] },
+    casual: { label: "Casual / fast fashion", domains: ["mango.com", "bershka.com", "pullandbear.com", "stradivarius.com", "massimodutti.com", "zara.com", "hm.com", "uniqlo.com", "primark.com", "shein.com", "asos.com", "zalando.de", "zalando.com", "vinted.de", "vinted.com"] },
   };
   const AGE_BUCKETS = ["16–24", "25–34", "35–44", "45–54", "55+"];
   const AGE_VOTES = {
@@ -229,17 +229,25 @@ const Twin = (() => {
     );
 
     // 10. Gender lean (guess): the crudest signal ad-tech uses, shown with low confidence on purpose
-    const female = (cats.beauty || 0) * 2;
-    const male = (cats.gaming || 0) + (cats.auto || 0);
+    const g = sig.gender || { m: 0, f: 0, sites: {} };
+    const female = (cats.beauty || 0) * 2 + g.f * 3;
+    const male = (cats.gaming || 0) + (cats.auto || 0) + g.m * 3;
     const diff = Math.abs(female - male);
+    const genderEvidence = [];
+    for (const [d, v] of Object.entries(g.sites || {})) {
+      if (v.m) genderEvidence.push(`${d}: ${v.m} page${v.m === 1 ? "" : "s"} in the men's section`);
+      if (v.f) genderEvidence.push(`${d}: ${v.f} page${v.f === 1 ? "" : "s"} in the women's section`);
+    }
+    if (cats.beauty) genderEvidence.push(`Beauty topics: ${cats.beauty}`);
+    if (cats.gaming || cats.auto) genderEvidence.push(`Gaming and car topics: ${(cats.gaming || 0) + (cats.auto || 0)}`);
     add(
       "gender",
       "Gender lean (guess)",
-      diff >= 4 ? (female > male ? "Leans female" : "Leans male") : null,
-      Math.min(0.5, sat(diff, 12)),
-      diff >= 4 ? ["Based on topic stereotypes such as beauty, gaming and cars"] : [],
-      "Needs a clear pattern of topic visits",
-      "Stereotype-based and often wrong. Capped at low confidence"
+      diff >= 3 ? (female > male ? "Leans female" : "Leans male") : null,
+      Math.min(0.5, sat(diff, 18)),
+      genderEvidence,
+      "Needs visits to shop sections like men's or women's, or clear topic patterns",
+      "Shops label their sections in the address, so advertisers read this directly. It can be wrong: you may be shopping for someone else"
     );
 
     // 11. Hair colour: nothing reveals it

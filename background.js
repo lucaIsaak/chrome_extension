@@ -90,6 +90,10 @@ async function completeTodos(ids) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === "shadowStatus") {
+    Shadow.status().then(sendResponse, () => sendResponse({ ok: false }));
+    return true;
+  }
   if (msg && (msg.type === "fp" || msg.type === "page")) {
     Shadow.handle(msg, sender).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
     return true;

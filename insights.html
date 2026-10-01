@@ -27,11 +27,26 @@
     </div>
   </header>
 
-  <main>
-    <div id="tabs" class="subtabs">
-      <button data-tab="twin" class="active">Digital twin</button>
-      <button data-tab="footprint">Footprint</button>
+  <div class="shell">
+  <aside class="sidebar" aria-label="Appearance">
+    <div class="side-section">
+      <div class="eyebrow">Explore</div>
+      <div id="tabs" class="sidenav" role="tablist" aria-label="Shadow views">
+        <button data-tab="twin" class="active" role="tab"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Digital twin</button>
+        <button data-tab="footprint" role="tab"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Footprint</button>
+      </div>
     </div>
+    <div class="side-section">
+    <div class="eyebrow">Style</div>
+    <div class="themes" role="group" aria-label="Visual style">
+      <button data-theme="glass" aria-pressed="true"><i class="sw sw-glass"></i><span class="t">Glass<small>soft panels</small></span></button>
+      <button data-theme="hud" aria-pressed="false"><i class="sw sw-hud"></i><span class="t">HUD<small>neon outlines</small></span></button>
+      <button data-theme="terminal" aria-pressed="false"><i class="sw sw-terminal"></i><span class="t">Terminal<small>log lines</small></span></button>
+    </div>
+    </div>
+  </aside>
+  <main>
+    <p id="status" class="status" role="status">Checking the recorder…</p>
     <p class="lead">Reef watches what websites collect while you browse. Everything is stored on this device only and nothing is sent anywhere. Adult, dating, medical and political-party sites are never recorded.</p>
 
     <!-- Footprint -->
@@ -81,6 +96,7 @@
       </div>
     </section>
   </main>
+  </div>
 
   <script src="shared.js"></script>
   <script src="trackers.js"></script>

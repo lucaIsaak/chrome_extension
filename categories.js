@@ -7,7 +7,7 @@ const Cats = (() => {
     music: ["spotify.com", "soundcloud.com", "deezer.com", "bandcamp.com", "genius.com", "last.fm"],
     gaming: ["steampowered.com", "epicgames.com", "roblox.com", "playstation.com", "xbox.com", "nintendo.com", "ign.com", "gamespot.com", "battle.net", "riotgames.com", "leagueoflegends.com", "gog.com", "itch.io", "twitch.tv"],
     shopping: ["amazon.com", "amazon.de", "amazon.co.uk", "ebay.com", "ebay.de", "aliexpress.com", "temu.com", "shein.com", "etsy.com", "otto.de", "zalando.de", "mediamarkt.de", "saturn.de", "idealo.de", "kleinanzeigen.de", "vinted.de", "vinted.com", "ikea.com", "lidl.de", "walmart.com", "target.com", "bestbuy.com", "wish.com", "mydealz.de", "geizhals.de", "notebooksbilliger.de", "groupon.com", "farfetch.com"],
-    fashion: ["zalando.de", "zalando.com", "hm.com", "zara.com", "nike.com", "adidas.com", "puma.com", "aboutyou.de", "asos.com", "uniqlo.com", "shein.com", "farfetch.com", "patagonia.com", "thenorthface.com", "stockx.com", "decathlon.de", "decathlon.com", "sportscheck.com", "newbalance.com", "primark.com", "vinted.de", "vinted.com", "mytheresa.com", "ssense.com", "net-a-porter.com", "hugoboss.com", "suitsupply.com"],
+    fashion: ["zalando.de", "zalando.com", "hm.com", "zara.com", "nike.com", "adidas.com", "puma.com", "aboutyou.de", "asos.com", "uniqlo.com", "shein.com", "farfetch.com", "patagonia.com", "thenorthface.com", "stockx.com", "decathlon.de", "decathlon.com", "sportscheck.com", "newbalance.com", "primark.com", "vinted.de", "vinted.com", "mytheresa.com", "ssense.com", "net-a-porter.com", "hugoboss.com", "suitsupply.com", "mango.com", "bershka.com", "pullandbear.com", "stradivarius.com", "massimodutti.com", "cos.com", "boohoo.com", "prettylittlething.com", "tommy.com", "ralphlauren.com", "levi.com", "zalando.pt", "zalando.es", "zalando.fr", "zalando.it"],
     sports: ["espn.com", "kicker.de", "sportschau.de", "transfermarkt.de", "transfermarkt.com", "fifa.com", "uefa.com", "nba.com", "sport1.de", "bundesliga.com", "skysports.com", "formula1.com"],
     news: ["bbc.com", "bbc.co.uk", "cnn.com", "nytimes.com", "theguardian.com", "spiegel.de", "zeit.de", "faz.net", "tagesschau.de", "bild.de", "welt.de", "sueddeutsche.de", "t-online.de", "reuters.com", "bloomberg.com", "washingtonpost.com", "focus.de", "n-tv.de", "stern.de", "handelsblatt.com", "ft.com"],
     tech: ["heise.de", "theverge.com", "techcrunch.com", "wired.com", "arstechnica.com", "golem.de", "computerbase.de", "engadget.com", "ycombinator.com", "producthunt.com", "chip.de", "netzwelt.de"],
@@ -37,7 +37,7 @@ const Cats = (() => {
 
   const KEYWORDS = {
     shopping: /\b(shop|store|buy|cart|deals?|sale|angebot|angebote|kaufen|warenkorb|bestellen|gutschein|coupon)\b/i,
-    fashion: /\b(fashion|mode|outfit|clothing|sneakers?|dress|jacket|jeans|kleid|schuhe)\b/i,
+    fashion: /\b(fashion|mode|moda|ropa|roupa|vestu[aá]rio|v[eê]tements|abbigliamento|outfit|clothing|sneakers?|dress|jacket|jeans|hoodie|sweater|kleid|schuhe|camisolas?|camisas?)\b/i,
     travel: /\b(travel|flights?|hotels?|vacation|urlaub|reise|flug|trip|holiday)\b/i,
     food: /\b(recipes?|rezepte?|cooking|kochen|restaurants?|delivery)\b/i,
     fitness: /\b(workout|fitness|gym|running|yoga|marathon|laufen)\b/i,
@@ -65,6 +65,22 @@ const Cats = (() => {
     /(^|\.)(afd|cdu|csu|spd|gruene|fdp|dielinke|republican|democrats?|labour|conservatives)\.(de|org|com|uk|party|net)$/i,
   ];
 
+  // Shops put the audience in the address and page title ("/men/", "Moda homem", "Damenmode").
+  // Advertisers read this directly. Returns "m", "f" or null (also null if both appear).
+  const MALE = new Set(["men", "mens", "menswear", "homem", "homens", "hombre", "hombres", "herren", "herrenmode", "mann", "uomo", "uomini", "homme", "hommes", "masculino", "male", "gentlemen"]);
+  const FEMALE = new Set(["women", "womens", "womenswear", "woman", "ladies", "female", "mulher", "mulheres", "mujer", "mujeres", "damen", "damenmode", "frau", "frauen", "donna", "donne", "femme", "femmes", "feminino", "feminina"]);
+  function genderHint(...texts) {
+    let m = 0;
+    let f = 0;
+    for (const text of texts) {
+      for (const word of String(text || "").toLowerCase().split(/[^a-zà-ÿ]+/)) {
+        if (MALE.has(word)) m++;
+        else if (FEMALE.has(word)) f++;
+      }
+    }
+    return m && !f ? "m" : f && !m ? "f" : null;
+  }
+
   const isSensitive = (text) => SENSITIVE.some((re) => re.test(String(text || "")));
 
   function classifyHost(host) {
@@ -84,5 +100,5 @@ const Cats = (() => {
     return out;
   }
 
-  return { DOMAINS, NON_INTEREST, classifyHost, classifyText, isSensitive };
+  return { DOMAINS, NON_INTEREST, classifyHost, classifyText, isSensitive, genderHint };
 })();

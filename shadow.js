@@ -15,10 +15,15 @@ const Shadow = (() => {
 
   const model = { sites: {}, signals: newSignals(), settings: { tracking: true } };
   let tabSites = {}; // tabId -> registrable domain of the page in that tab
+  const stats = { started: Date.now(), requests: 0, pages: 0, errors: 0, lastError: null, lastPage: null };
+  const fail = (e) => {
+    stats.errors++;
+    stats.lastError = String((e && e.message) || e);
+  };
   let saveTimer = null;
 
   function newSignals() {
-    return { cats: {}, hours: Array(24).fill(0), days: Array(7).fill(0), domains: {}, pages: 0, since: Date.now() };
+    return { cats: {}, hours: Array(24).fill(0), days: Array(7).fill(0), domains: {}, gender: { m: 0, f: 0, sites: {} }, pages: 0, since: Date.now() };
   }
 
   const loaded = Promise.all([
@@ -169,6 +174,7 @@ const Shadow = (() => {
   // ----- webRequest listeners -----
   async function onRequest(details) {
     await loaded;
+    stats.requests++;
     if (!model.settings.tracking || details.tabId < 0) return;
     let url;
     try {
@@ -182,6 +188,8 @@ const Shadow = (() => {
         delete tabSites[details.tabId]; // sensitive site: record nothing
       } else {
         tabSites[details.tabId] = recordVisit(url.hostname);
+        stats.pages++;
+        stats.lastPage = Date.now();
       }
       persistTabs();
       scheduleSave();
@@ -241,8 +249,22 @@ const Shadow = (() => {
     scheduleSave();
   }
 
-  chrome.webRequest.onBeforeRequest.addListener(onRequest, { urls: ["http://*/*", "https://*/*"] }, ["requestBody"]);
-  chrome.webRequest.onHeadersReceived.addListener(onHeaders, { urls: ["http://*/*", "https://*/*"] }, ["responseHeaders", "extraHeaders"]);
+  // Errors are counted and shown on the Shadow page instead of silently stopping the recorder
+  const guard = (fn) => async (details) => {
+    try {
+      await fn(details);
+    } catch (e) {
+      fail(e);
+    }
+  };
+  try {
+    const filter = { urls: ["http://*/*", "https://*/*"] };
+    chrome.webRequest.onBeforeRequest.addListener(guard(onRequest), filter, ["requestBody"]);
+    chrome.webRequest.onHeadersReceived.addListener(guard(onHeaders), filter, ["responseHeaders", "extraHeaders"]);
+  } catch (e) {
+    fail(e);
+  }
+  loaded.catch(fail);
 
   // ----- messages from page-bridge.js -----
   async function handle(msg, sender) {
@@ -264,8 +286,18 @@ const Shadow = (() => {
     } else if (msg.type === "page" && sender.frameId === 0) {
       // Classify the title and description locally, then discard the text.
       const text = String(msg.title || "") + " " + String(msg.desc || "");
-      if (Cats.isSensitive(text)) return;
+      if (Cats.isSensitive(text + " " + String(msg.path || ""))) return;
       addCats(s, Cats.classifyText(text));
+      // Shop sections such as /men/ or "Moda homem" (counts only; the address itself is not kept)
+      const hint = Cats.genderHint(msg.path, msg.title);
+      if (hint) {
+        const g = model.signals.gender || (model.signals.gender = { m: 0, f: 0, sites: {} });
+        g[hint]++;
+        if (g.sites[top] || Object.keys(g.sites).length < 60) {
+          const d = g.sites[top] || (g.sites[top] = { m: 0, f: 0 });
+          d[hint]++;
+        }
+      }
       scheduleSave();
     }
   }
@@ -277,5 +309,10 @@ const Shadow = (() => {
     }
   });
 
-  return { handle };
+  async function status() {
+    await loaded;
+    return { ok: true, tracking: model.settings.tracking, sites: Object.keys(model.sites).length, ...stats };
+  }
+
+  return { handle, status };
 })();
