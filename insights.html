@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reef · Shadow</title>
+  <link rel="stylesheet" href="insights.css">
+</head>
+<body>
+  <header class="top">
+    <nav class="switcher" aria-label="Reef sections">
+      <a href="newtab.html" class="nav-item">
+        <span class="logo"><svg viewBox="0 0 100 100"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="6"><path d="M50 90V58"/><path d="M50 80L36 66L30 50L24 40"/><path d="M50 78L64 64L70 48L76 38"/><path d="M50 58L44 44L40 32"/><path d="M50 58L57 42"/></g></svg></span>
+        <span class="wordmark">reef</span>
+      </a>
+      <a href="insights.html" class="nav-item active" aria-current="page">
+        <span class="logo"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <span class="wordmark">your shadow</span>
+      </a>
+    </nav>
+    <div class="top-right">
+      <label class="switch" title="Pause or resume recording">
+        <input type="checkbox" id="tracking" checked>
+        <span id="tracking-label">Recording</span>
+      </label>
+      <button id="clear" class="btn-outline">Delete all data</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="tabs" class="subtabs">
+      <button data-tab="twin" class="active">Digital twin</button>
+      <button data-tab="footprint">Footprint</button>
+    </div>
+    <p class="lead">Reef watches what websites collect while you browse. Everything is stored on this device only and nothing is sent anywhere. Adult, dating, medical and political-party sites are never recorded.</p>
+
+    <!-- Footprint -->
+    <section id="tab-footprint" hidden>
+      <div id="summary" class="tiles"></div>
+
+      <div class="two">
+        <div class="card">
+          <h2>Who follows you</h2>
+          <ul id="companies" class="bars"></ul>
+          <p id="companies-empty" class="hint" hidden>No trackers seen yet. Browse a few websites and come back.</p>
+        </div>
+        <div class="card">
+          <h2>What your browser tells every site</h2>
+          <dl id="env" class="env"></dl>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="head"><h2>Websites</h2><span id="site-count" class="hint"></span></div>
+        <div id="sites"></div>
+        <p id="sites-empty" class="hint" hidden>Nothing recorded yet. Open any website in a normal tab and it will appear here.</p>
+      </div>
+    </section>
+
+    <!-- Digital twin -->
+    <section id="tab-twin">
+      <div class="twin-grid">
+        <div class="card avatar-card">
+          <div id="stage3d" class="stage3d" tabindex="0" role="img" aria-label="3D view of your digital twin. Drag or scroll to rotate."></div>
+          <div id="avatar" class="avatar" hidden></div>
+          <div class="stage-top eyebrow">Your digital twin</div>
+          <div class="stage-hint">Drag or scroll to rotate · double-click to reset</div>
+          <div class="stage-bottom">
+            <div class="progress"><div id="progress-bar"></div></div>
+            <p id="progress-text" class="hint"></p>
+          </div>
+        </div>
+        <div class="card">
+          <p class="lead small">This is what an ad network could plausibly guess about you from the same signals websites can see. They are crude guesses and often wrong. That is the point.</p>
+          <h2>Known the moment you open a page</h2>
+          <div id="exposed" class="attrs"></div>
+          <h2>Learned from how you browse</h2>
+          <div id="inferred" class="attrs"></div>
+          <p class="note">Never inferred: political views, sexual orientation, health, religion or ethnicity.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="trackers.js"></script>
+  <script src="categories.js"></script>
+  <script src="twin.js"></script>
+  <script src="insights.js"></script>
+</body>
+</html>

@@ -22,6 +22,19 @@ const Reef = (() => {
     return /^([a-z0-9-]+\.)+[a-z0-9-]{2,}$/.test(host) ? host : null;
   }
 
+  // "m.youtube.com" -> "youtube.com", "www.bbc.co.uk" -> "bbc.co.uk" (small built-in suffix list)
+  const SECOND_LEVEL = new Set([
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.jp", "co.in",
+    "com.br", "com.cn", "co.nz", "co.za", "com.mx", "com.tr", "com.sg", "co.kr",
+  ]);
+  function registrable(host) {
+    host = String(host || "").toLowerCase().replace(/\.$/, "");
+    if (/^[\d.]+$/.test(host) || host.includes(":")) return host;
+    const parts = host.split(".");
+    if (parts.length <= 2) return host;
+    return SECOND_LEVEL.has(parts.slice(-2).join(".")) ? parts.slice(-3).join(".") : parts.slice(-2).join(".");
+  }
+
   function formatTime(ms) {
     const total = Math.max(0, Math.ceil(ms / 1000));
     const h = Math.floor(total / 3600);
@@ -73,5 +86,5 @@ const Reef = (() => {
     );
   }
 
-  return { STAGES, stageFor, normalizeDomain, formatTime, coralSVG };
+  return { STAGES, stageFor, normalizeDomain, registrable, formatTime, coralSVG };
 })();

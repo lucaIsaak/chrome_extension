@@ -1,5 +1,8 @@
-// Service worker: owns session state, blocking rules and Gmail completion prompts.
+// Service worker: owns session state, blocking rules and Gmail completion prompts,
+// and (via shadow.js) records what websites collect about the user.
 // Storage keys: blocklist [domain], session {startTime,endTime,minutes}, history [...], todos [...]
+
+importScripts("shared.js", "trackers.js", "categories.js", "shadow.js");
 
 const ALARM = "sessionEnd";
 const END_TOLERANCE_MS = 5000;
@@ -87,6 +90,10 @@ async function completeTodos(ids) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && (msg.type === "fp" || msg.type === "page")) {
+    Shadow.handle(msg, sender).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
+    return true;
+  }
   const handle = async () => {
     switch (msg && msg.type) {
       case "start":

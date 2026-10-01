@@ -28,10 +28,16 @@
   <div class="shade"></div>
 
   <header class="top">
-    <div class="brand">
-      <span class="logo"><svg viewBox="0 0 100 100"><use href="#cr"/></svg></span>
-      <span class="wordmark">reef</span>
-    </div>
+    <nav class="switcher" aria-label="Reef sections">
+      <a href="newtab.html" class="nav-item active" aria-current="page">
+        <span class="logo"><svg viewBox="0 0 100 100"><use href="#cr"/></svg></span>
+        <span class="wordmark">reef</span>
+      </a>
+      <a href="insights.html" class="nav-item">
+        <span class="logo"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <span class="wordmark">your shadow</span>
+      </a>
+    </nav>
     <div class="top-right">
       <span class="tagline">Make this place yours</span>
       <div class="menu-wrap">
@@ -82,7 +88,6 @@
                 <span>min</span>
               </div>
               <button id="start" class="btn-primary">Start focus</button>
-              <p id="empty-hint" class="hint small" hidden>No sites blocked yet. Add some in the Reef popup (toolbar icon, Sites tab).</p>
             </div>
 
             <div id="active-panel" hidden>
@@ -98,6 +103,18 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <div id="sites-block" class="sites-block">
+          <div class="eyebrow">Blocked while you focus</div>
+          <ul id="site-chips" class="chips"></ul>
+          <form id="site-form" class="add">
+            <input id="site-input" type="text" placeholder="Add a site to block, e.g. youtube.com" autocomplete="off">
+            <button type="submit" class="plus" aria-label="Block site">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </form>
+          <p id="site-error" class="error" hidden></p>
         </div>
       </article>
 

@@ -93,11 +93,40 @@ Reef is the first thing you see in every new tab.
 - [ ] "Choose a scene" lets the user pick one of three built-in backgrounds (Dusk, Deep sea, Sunset) or upload their own image.
 - [ ] An image can also be dragged and dropped onto the page to become the background.
 - [ ] The chosen scene is still there after restarting Chrome, and the reset button restores the default.
-- [ ] Managing blocked sites stays in the popup (Sites tab).
+- [ ] The Focus card has a "Blocked while you focus" section: add a site, see all blocked sites as chips, remove one with ×. It is hidden while a session runs. The popup's Sites tab shows the same list.
+- [ ] The header has two switchers on the left, "reef" and "your shadow". The page the user is on is highlighted. Both pages (new tab and Shadow) use the same header.
+
+## 2b. Second purpose: "Shadow" (V2)
+
+Reef also shows **what websites collect about you** and what they could **infer** from it. Everything is observed and stored locally in the browser, nothing is sent anywhere.
+
+**Out of scope:** political views, sexual orientation, health conditions and religion are never inferred. Sites that look like adult, dating, medical or political-party sites are never recorded at all. What a website does with data on its own servers cannot be observed, so the extension only shows what leaves the browser and what is exposed.
+
+### F9: Footprint (data collected per website)
+- [ ] For every website visited, the extension records the third parties contacted (domain, company if known, category such as advertising, analytics, social, session replay, data broker, and number of requests).
+- [ ] It records cookies set by the site and by third parties (name, domain, lifetime in days, third-party yes/no). Cookie values are not stored.
+- [ ] It records identifiers and data sent to third parties in URLs and request bodies (parameter name, kind such as identifier / device / location / page / campaign, and a shortened sample value).
+- [ ] It detects fingerprinting and device-reading behaviour in the page (canvas read-back, graphics card query, audio rendering, font probing, CPU/memory, screen, time zone, language, plugins, geolocation request, background beacons) and shows which script host did it.
+- [ ] Each website gets an exposure score (Low / Medium / High / Very high) with a short reason.
+- [ ] A "Shadow" page lists all websites sorted by exposure. Opening a website shows the details above.
+- [ ] A summary shows how many websites, trackers and companies were found, and which companies follow the user across the most websites.
+- [ ] A panel shows what the browser exposes to every website without asking (system, language, time zone, screen, CPU cores, and that the IP address reveals an approximate location).
+- [ ] The user can pause tracking and delete all collected data at any time.
+
+### F10: Digital twin (what could be inferred about you)
+- [ ] The twin page starts as a grey silhouette with a question mark and a "0% complete" status.
+- [ ] As more pages are visited, attributes appear, each with a value, a confidence bar and the evidence ("Because you visited ...").
+- [ ] Attributes: location (time zone / language), languages, device, daily rhythm, interests, work or life stage, spending behaviour, clothing style, age range (guess), gender lean (guess).
+- [ ] Hair colour always stays "?" with the explanation that nothing in the data reveals it.
+- [ ] Age and gender guesses are capped at low confidence and labelled as unreliable ad-tech style guesses.
+- [ ] The avatar visibly fills in as confidence grows (outfit style, props that match interests) and shows a completeness percentage.
+- [ ] Only counters are stored (categories, hours, domain counts). Page titles and text are classified locally and then discarded.
+- [ ] A note on the page states which traits are never inferred.
 
 ## 3. Technical notes (for the build)
 
 - Manifest V3, plain HTML/CSS/JS, no build step.
+- Shadow: `webRequest` (observe only) for requests, `Set-Cookie` headers and request bodies; a MAIN-world content script (`page-hooks.js`) wraps fingerprinting-related browser APIs; an isolated content script (`page-bridge.js`) forwards the results and the page title to the service worker. Tracker list in `trackers.js`, categories in `categories.js`, inference in `twin.js`, UI in `insights.html/js/css`.
 - Blocking via `declarativeNetRequest` dynamic rules (redirect to `blocked.html`), added on session start and removed on session end/give-up.
 - Storage: `chrome.storage.local` (blocklist, active session `{startTime, endTime}`, history).
 - Session end handled by `chrome.alarms` in the background service worker.

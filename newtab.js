@@ -28,6 +28,12 @@ let checking = false;
 let coralKey = "";
 let sceneKey = "";
 
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
 const send = (msg) => chrome.runtime.sendMessage(msg);
 const isToday = (ts) => new Date(ts).toDateString() === new Date().toDateString();
 const isActive = () => !!data.session && data.session.endTime > Date.now();
@@ -174,7 +180,7 @@ function renderFocus() {
   const n = data.blocklist.length;
   $("#idle-panel").hidden = active;
   $("#active-panel").hidden = !active;
-  $("#empty-hint").hidden = n > 0;
+  $("#sites-block").hidden = active; // the list is locked while a session runs
   $("#confirm-box").hidden = !confirming;
   $("#give-up").hidden = confirming;
   $("#blocking-count").textContent = n ? `${n} site${n === 1 ? "" : "s"} blocked` : "";
@@ -246,6 +252,52 @@ $("#confirm-give-up").addEventListener("click", async () => {
   confirming = false;
   await send({ type: "giveUp" });
   await refresh();
+});
+
+// ---------- Blocked sites ----------
+function renderSites() {
+  const ul = $("#site-chips");
+  ul.replaceChildren();
+  if (!data.blocklist.length) {
+    ul.append(el("li", "empty", "Nothing blocked yet. Add the sites that distract you."));
+    return;
+  }
+  for (const domain of data.blocklist) {
+    const li = el("li", "", domain);
+    const del = el("button", "icon-btn", "×");
+    del.title = "Remove";
+    del.setAttribute("aria-label", "Remove " + domain);
+    del.addEventListener("click", () => saveBlocklist(data.blocklist.filter((d) => d !== domain)));
+    li.append(del);
+    ul.append(li);
+  }
+}
+
+async function saveBlocklist(blocklist) {
+  if (isActive()) return;
+  data.blocklist = blocklist;
+  await chrome.storage.local.set({ blocklist });
+  await send({ type: "syncRules" });
+  render();
+}
+
+$("#site-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("#site-error");
+  const domain = Reef.normalizeDomain($("#site-input").value);
+  if (!domain) {
+    err.textContent = "Enter a valid site, like youtube.com.";
+    err.hidden = false;
+    return;
+  }
+  if (data.blocklist.includes(domain)) {
+    err.textContent = domain + " is already in your list.";
+    err.hidden = false;
+    return;
+  }
+  err.hidden = true;
+  $("#site-input").value = "";
+  await saveBlocklist([...data.blocklist, domain]);
 });
 
 // ---------- To-do ----------
@@ -334,11 +386,14 @@ function render() {
   applyScene();
   updateHero();
   renderFocus();
+  renderSites();
   renderTodos();
   renderReef();
 }
 
-chrome.storage.onChanged.addListener(refresh);
+chrome.storage.onChanged.addListener((changes) => {
+  if (Object.keys(changes).some((k) => k in DEFAULTS)) refresh(); // ignore Shadow tracking writes
+});
 
 (async () => {
   await send({ type: "check" }); // finalize a session that ended while the browser was closed

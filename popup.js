@@ -247,7 +247,9 @@ function render() {
   renderReef();
 }
 
-chrome.storage.onChanged.addListener(refresh);
+chrome.storage.onChanged.addListener((changes) => {
+  if (Object.keys(changes).some((k) => k in DEFAULTS)) refresh(); // ignore Shadow tracking writes
+});
 
 (async () => {
   await send({ type: "check" }); // finalize a session that ended while the browser was closed

@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Reef",
-  "version": "1.0.0",
-  "description": "Grow a coral reef by staying focused. Blocks distracting sites during focus sessions and tracks your to-dos.",
-  "permissions": ["storage", "alarms", "declarativeNetRequest"],
+  "version": "2.0.0",
+  "description": "Grow a coral reef by staying focused, and see what websites collect and could infer about you. Everything stays on your device.",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage", "alarms", "declarativeNetRequest", "webRequest"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
@@ -20,6 +21,19 @@
       "matches": ["https://mail.google.com/*"],
       "js": ["gmail-content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["page-hooks.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["page-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [
